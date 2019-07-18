@@ -45,7 +45,7 @@ def generate_models(num_var,k,num_hard,num_soft,seed,file_name,num_models):
         models[i]['weights']=normalized_weights
     pickle.dump(models,open(file_name,'wb'))
 
-def generate_samples(file_name,num_sample):
+def generate_samples(file_name,num_sample,seed,percent_observed):
 
     models=pickle.load(open(file_name,'rb'))
     for model in models:
@@ -60,6 +60,8 @@ def generate_samples(file_name,num_sample):
             if not is_feasible(cnf,num_var):
                 cnfs.remove(cnf)
         constraint_indices=list(range(len(cnfs)))
+        random.seed(seed)
+        observed_indices=random.sample(N,int(num_var*percent_observed))
         print("####################################")
         print("Number of constraints: ",len(cnfs)) # nCk * 2^k
         print("hard constraints: ",hard_indices)
@@ -73,6 +75,8 @@ def generate_samples(file_name,num_sample):
             x = m.addVars(N, vtype=GRB.BINARY, name="x")
             neg_x = m.addVars(N, vtype=GRB.BINARY, name="neg_x")
             satisfaction = m.addVars(constraint_indices, vtype=GRB.BINARY, name="sat")
+            
+            m.addConstrs((x[i]==random.randint(0,1) for i in observed_indices),"observed")
             
             m.addConstrs((neg_x[n]==1-x[n] for n in N),"negations")
             for l,cnf in enumerate(cnfs):

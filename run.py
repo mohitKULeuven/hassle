@@ -31,6 +31,8 @@ def main():
                         help='Number of models to be generated')
     parser.add_argument('--num_samples', type=int, default=1,
                         help='Number of models to be generated')
+    parser.add_argument('--percent_observed', type=float, default=0,
+                        help='Number of models to be generated')
     args = parser.parse_args()
 
     np.seterr(all='raise')
@@ -40,7 +42,8 @@ def main():
 
     sample_generator.generate_models(
             args.num_var,args.k,args.num_hard,args.num_soft,args.seed,args.file_name,args.num_models)
-    sample_generator.generate_samples(args.file_name,args.num_samples)
+    sample_generator.generate_samples(
+            args.file_name,args.num_samples,args.seed,args.percent_observed)
 
 
 if __name__ == '__main__':
