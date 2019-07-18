@@ -114,8 +114,3 @@ def generate_samples(file_name,num_sample):
         
         except AttributeError:
             print('Encountered an attribute error')
-
-#generate_models(num_var,k,num_hard,num_soft,seed,file_name,num_models)
-generate_models(5,3,1,2,1,"tmp",3)
-generate_samples("tmp",2)
-
