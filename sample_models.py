@@ -12,7 +12,7 @@ from scipy.special import binom
 _MIN_WEIGHT, _MAX_WEIGHT = 1, 100
 
 
-def _generate_all_clauses_up_to_length(num_vars, length, pcaq):
+def _generate_all_clauses_up_to_length(num_vars, length):
     flip_or_dont = lambda v: -(v - num_vars) if v > num_vars else v
 
     lits = range(1, 2 * num_vars + 1)
@@ -31,15 +31,7 @@ def _generate_all_clauses_up_to_length(num_vars, length, pcaq):
                     return False
         return True
 
-    clauses = list(sorted(filter(possible, clauses)))
-
-    if pcaq:
-        # Print the clauses and quit
-        from pprint import pprint
-        pprint(clauses)
-        quit()
-
-    return clauses
+    return list(sorted(filter(possible, clauses)))
 
 
 def generate_models(path,
@@ -51,7 +43,13 @@ def generate_models(path,
                     pcaq,
                     rng):
 
-    clauses = _generate_all_clauses_up_to_length(num_vars, clause_length, pcaq)
+    clauses = _generate_all_clauses_up_to_length(num_vars, clause_length)
+
+    if pcaq:
+        # Print the clauses and quit
+        from pprint import pprint
+        pprint(clauses)
+        quit()
 
     num_clauses = len(clauses)
     num_hard = int(np.ceil(num_clauses * perc_hard))
