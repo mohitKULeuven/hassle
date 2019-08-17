@@ -4,10 +4,12 @@
 import pickle
 import numpy as np
 import itertools as it
+from pysat.formula import WCNF
 from scipy.special import binom
 
 
-_EPSILON = 0.001
+# XXX some solvers support integer weights only, let's do that
+_MIN_WEIGHT, _MAX_WEIGHT = 1, 100
 
 
 def _generate_all_clauses_up_to_length(num_vars, length, pcaq):
@@ -40,28 +42,6 @@ def _generate_all_clauses_up_to_length(num_vars, length, pcaq):
     return clauses
 
 
-def _to_clause_line(clause, weight=None):
-    line_weight = '' if weight is None else f'{weight:5.3f} '
-    return line_weight + ' '.join(list(map(str, clause + (0,))))
-
-
-def _write_wcnf(path, clauses, num_vars, hard_indices, soft_indices, c, w):
-    his, sis = set(hard_indices), set(soft_indices)
-    num_active_clauses = len(his | sis)
-
-    with open(path, 'wt') as fp:
-        fp.write(f'p wcnf {num_vars} {num_active_clauses}\n')
-
-        # XXX hard and soft indices might overlap;  hard wins
-        # XXX some solvers only support integer weights
-
-        for i in hard_indices:
-            fp.write(_to_clause_line(clauses[i]) + '\n')
-
-        for i in sorted(sis - his):
-            fp.write(_to_clause_line(clauses[i], weight=w[i]) + '\n')
-
-
 def generate_models(path,
                     num_models,
                     num_vars,
@@ -85,20 +65,15 @@ def generate_models(path,
         print(f'generating model {m + 1} of {num_models}')
 
         hard_indices = list(sorted(rng.permutation(num_clauses)[:num_hard]))
-        c = np.zeros(num_clauses, dtype=np.int)
-        c[hard_indices] = 1
-
         soft_indices = list(sorted(rng.permutation(num_clauses)[:num_soft]))
-        w = np.zeros(num_clauses, dtype=np.float32)
-        temp = rng.uniform(_EPSILON, 1, size=num_soft)
-        w[soft_indices] = temp / np.linalg.norm(temp)
+        weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
 
-        _write_wcnf(path + f'_{m}.wcnf',
-                    clauses,
-                    num_vars,
-                    hard_indices,
-                    soft_indices,
-                    c, w)
+        wcnf = WCNF()
+        for i in hard_indices:
+            wcnf.append(clauses[i])
+        for i, weight in zip(soft_indices, weights):
+            wcnf.append(clauses[i], weight=weight)
+        wcnf.to_file(path + f'_{m}.wcnf')
 
 
 def main():
