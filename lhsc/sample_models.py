@@ -53,7 +53,8 @@ def generate_models(path,
     num_clauses = len(clauses)
     num_hard = int(np.ceil(num_clauses * perc_hard))
     num_soft = int(np.ceil(num_clauses * perc_soft))
-    assert num_hard + num_soft > 0
+    total = num_hard + num_soft
+    assert total > 0
 
     print(f'{num_clauses} clauses total - {num_hard} hard and {num_soft} soft')
 
@@ -61,8 +62,10 @@ def generate_models(path,
     for m in range(num_models):
         print(f'generating model {m + 1} of {num_models}')
 
-        hard_indices = list(sorted(rng.permutation(num_clauses)[:num_hard]))
-        soft_indices = list(sorted(rng.permutation(num_clauses)[:num_soft]))
+        indices = list(sorted(rng.permutation(num_clauses)[:total]))
+        hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
+        soft_indices = list(sorted(set(indices) - set(hard_indices)))
+        assert len(soft_indices) == num_soft
         weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
 
         wcnf = WCNF()
