@@ -32,6 +32,15 @@ def _generate_all_clauses_up_to_length(num_vars, length):
 
     return list(sorted(filter(possible, clauses)))
 
+def add_context(rng,num_clauses,hard_indices,soft_indices,perc_context):
+    
+    num_context = int(np.ceil(num_clauses * perc_context))
+    indices = list(sorted(rng.permutation(num_clauses)))
+    not_hard_indices=list(sorted(set(indices) - set(hard_indices)))
+    context_indices = list(sorted(rng.permutation(not_hard_indices)[:num_context]))
+    return set(hard_indices).union(
+            set(context_indices)),set(soft_indices).difference(
+                    set(context_indices))
 
 def generate_models(path,
                     num_models,
@@ -39,6 +48,7 @@ def generate_models(path,
                     clause_length,
                     perc_hard,
                     perc_soft,
+                    perc_context,
                     pcaq,
                     rng):
 
@@ -53,16 +63,25 @@ def generate_models(path,
     num_clauses = len(clauses)
     num_hard = int(np.ceil(num_clauses * perc_hard))
     num_soft = int(np.ceil(num_clauses * perc_soft))
-    assert num_hard + num_soft > 0
+    total = num_hard + num_soft
+    assert total > 0
 
     print(f'{num_clauses} clauses total - {num_hard} hard and {num_soft} soft')
 
-    models = []
+#    models = []
     for m in range(num_models):
         print(f'generating model {m + 1} of {num_models}')
 
-        hard_indices = list(sorted(rng.permutation(num_clauses)[:num_hard]))
-        soft_indices = list(sorted(rng.permutation(num_clauses)[:num_soft]))
+        indices = list(sorted(rng.permutation(num_clauses)[:total]))
+        hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
+        soft_indices = list(sorted(set(indices) - set(hard_indices)))
+        assert len(soft_indices) == num_soft
+        
+        if(perc_context>0):
+            hard_indices,soft_indices=add_context(
+                    rng,num_clauses,hard_indices,soft_indices,perc_context)
+            num_soft=len(soft_indices)
+        
         weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
 
         wcnf = WCNF()
@@ -90,6 +109,8 @@ def main():
                         help='Number of hard constraints')
     parser.add_argument('--perc-soft', type=float, default=0.1,
                         help='Number of soft constraints')
+    parser.add_argument('--perc-context', type=float, default=0,
+                        help='Number of constraints in the context')
     parser.add_argument('-q', action='store_true',
                         help='Print the clauses and quit')
     parser.add_argument('-s', '--seed', type=int, default=0,
@@ -103,6 +124,7 @@ def main():
                     args.k,
                     args.perc_hard,
                     args.perc_soft,
+                    args.perc_context,
                     args.q,
                     rng)
 
