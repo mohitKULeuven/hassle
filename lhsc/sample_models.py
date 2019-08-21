@@ -44,6 +44,7 @@ def add_context(rng,num_clauses,hard_indices,soft_indices,perc_context):
 
 def generate_models(path,
                     num_models,
+                    num_context,
                     num_vars,
                     clause_length,
                     perc_hard,
@@ -77,19 +78,32 @@ def generate_models(path,
         soft_indices = list(sorted(set(indices) - set(hard_indices)))
         assert len(soft_indices) == num_soft
         
-        if(perc_context>0):
-            hard_indices,soft_indices=add_context(
-                    rng,num_clauses,hard_indices,soft_indices,perc_context)
-            num_soft=len(soft_indices)
-        
         weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
-
         wcnf = WCNF()
         for i in hard_indices:
             wcnf.append(clauses[i])
         for i, weight in zip(soft_indices, weights):
             wcnf.append(clauses[i], weight=weight)
-        wcnf.to_file(path + f'_{m}.wcnf')
+        wcnf.to_file(path+ f'_{m}.wcnf')
+#        print(soft_indices,weights)
+        for n in range(num_context):
+            hard_indices,soft_indices_context=add_context(
+                    rng,num_clauses,hard_indices,soft_indices,perc_context)
+            num_soft=len(soft_indices)
+        
+            context_weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
+            
+            for i,ind in enumerate(soft_indices_context):
+                if ind in soft_indices:
+                    context_weights[i]=weights[soft_indices.index(ind)]
+            
+#            print(soft_indices,weights)
+            wcnf = WCNF()
+            for i in hard_indices:
+                wcnf.append(clauses[i])
+            for i, weight in zip(soft_indices_context, context_weights):
+                wcnf.append(clauses[i], weight=weight)
+            wcnf.to_file(path+ f'_{m}_context_{n}.wcnf')
 
 
 def main():
@@ -101,6 +115,8 @@ def main():
                         help='Path to the output file')
     parser.add_argument('--num-models', type=int, default=2,
                         help='Number of models to be generated')
+    parser.add_argument('--num-context', type=int, default=0,
+                        help='Number of models to be generated')
     parser.add_argument('-n', type=int, default=3,
                         help='number of variables')
     parser.add_argument('-k', type=int, default=3,
@@ -109,7 +125,7 @@ def main():
                         help='Number of hard constraints')
     parser.add_argument('--perc-soft', type=float, default=0.1,
                         help='Number of soft constraints')
-    parser.add_argument('--perc-context', type=float, default=0,
+    parser.add_argument('--perc-context', type=float, default=0.1,
                         help='Number of constraints in the context')
     parser.add_argument('-q', action='store_true',
                         help='Print the clauses and quit')
@@ -120,6 +136,7 @@ def main():
     rng = np.random.RandomState(args.seed)
     generate_models(args.output,
                     args.num_models,
+                    args.num_context,
                     args.n,
                     args.k,
                     args.perc_hard,
