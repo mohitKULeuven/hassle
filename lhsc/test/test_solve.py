@@ -3,7 +3,7 @@ import numpy as np
 from typing import Tuple
 
 from lhsc.solve import solve_weighted_max_sat
-from lhsc.type_def import Clause, MaxSatModel
+from lhsc.type_def import MaxSatModel
 
 
 def example2_model() -> Tuple[int, MaxSatModel]:
@@ -30,6 +30,8 @@ def test_example2():
     for context, solutions in zip(contexts, solutions_list):
         instance = solve_weighted_max_sat(n, model, context)
         if len(solutions) > 0:
-            assert instance in [np.array(s) for s in solutions]
+            print(instance)
+            print(*[np.array(s) for s in solutions], sep="\n")
+            assert any(all(instance == np.array(s)) for s in solutions)
         else:
             assert instance is None

@@ -4,9 +4,6 @@ import numpy as np
 from typing import Set, List, Optional, Tuple
 from contextlib import contextmanager
 
-# noinspection PyUnresolvedReferences
-from gurobipy import Model, GRB, quicksum
-
 
 @contextmanager
 def suppress_stdout():
@@ -19,9 +16,6 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
-Model = Model
-GRB = GRB
-quicksum = quicksum
 Clause = Set[int]
 MaxSatModel = List[Tuple[Optional[float], Clause]]
 Instance = np.ndarray  # A numpy array of 0s and 1s (False and True)

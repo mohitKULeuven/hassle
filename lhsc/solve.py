@@ -1,12 +1,8 @@
-from .type_def import (
-    MaxSatModel,
-    Clause,
-    Model,
-    GRB,
-    quicksum,
-    suppress_stdout,
-    Instance,
-)
+import numpy as np
+
+from .type_def import MaxSatModel, Clause, suppress_stdout, Instance
+
+from gurobipy import Model, GRB, quicksum
 
 
 def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Instance:
@@ -71,6 +67,7 @@ def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Insta
             *[f"{x_l[l].x}" for l in range(n)],
             sep=" ",
         )
+        return np.array([x_l[l] for l in range(n)])
     else:
         print("No solution found")
         return None

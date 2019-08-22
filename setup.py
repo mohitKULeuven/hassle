@@ -21,7 +21,7 @@ REQUIRES_PYTHON = ">=3.6.0"
 VERSION = "0.1.0"
 
 # What packages are required for this module to be executed?
-REQUIRED = ["pywmi", "numpy", "sklearn", "pysat"]  # 'requests', 'maya', 'records',
+REQUIRED = ["pywmi", "numpy", "sklearn"]  # 'requests', 'maya', 'records',
 
 # What packages are optional?
 EXTRAS = {
@@ -109,6 +109,8 @@ setup(
     # },
     install_requires=REQUIRED,
     extras_require=EXTRAS,
+    setup_requires=["pytest-runner"],
+    tests_require=["pytest"],
     include_package_data=True,
     license="MIT",
     classifiers=[

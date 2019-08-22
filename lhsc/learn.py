@@ -4,7 +4,8 @@ from typing import List
 
 import numpy as np
 
-from .type_def import MaxSatModel, Clause, Model, GRB, quicksum, suppress_stdout
+from .type_def import MaxSatModel, Clause, suppress_stdout
+from gurobipy import Model, GRB, quicksum
 
 
 def learn_weighted_max_sat(
