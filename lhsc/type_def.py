@@ -17,5 +17,6 @@ def suppress_stdout():
 
 
 Clause = Set[int]
+Context = Set[int]
 MaxSatModel = List[Tuple[Optional[float], Clause]]
 Instance = np.ndarray  # A numpy array of 0s and 1s (False and True)

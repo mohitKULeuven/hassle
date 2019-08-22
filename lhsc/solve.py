@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 
 from .type_def import MaxSatModel, Clause, suppress_stdout, Instance
@@ -71,3 +73,18 @@ def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Insta
     else:
         print("No solution found")
         return None
+
+
+def get_value(model: MaxSatModel, instance: Instance) -> Optional[float]:
+    value = 0
+    for weight, clause in model:
+        covered = any(
+            not instance[abs(i) - 1] if i < 0 else instance[i - 1] for i in clause
+        )
+        if weight is None:
+            if not covered:
+                return None
+        else:
+            if covered:
+                value += weight
+    return value

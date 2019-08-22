@@ -2,8 +2,13 @@ import numpy as np
 
 from typing import Tuple
 
-from lhsc.solve import solve_weighted_max_sat
+import pytest
+
+from lhsc.solve import solve_weighted_max_sat, get_value
 from lhsc.type_def import MaxSatModel
+
+
+DELTA = 10 * (-10)
 
 
 def example2_model() -> Tuple[int, MaxSatModel]:
@@ -35,3 +40,11 @@ def test_example2():
             assert any(all(instance == np.array(s)) for s in solutions)
         else:
             assert instance is None
+
+
+def test_get_value():
+    n, model = example2_model()
+    assert get_value(model, np.array([True, True])) == pytest.approx(1.0, DELTA)
+    assert get_value(model, np.array([True, False])) == pytest.approx(1.0, DELTA)
+    assert get_value(model, np.array([False, True])) == pytest.approx(0.0, DELTA)
+    assert get_value(model, np.array([False, False])) is None

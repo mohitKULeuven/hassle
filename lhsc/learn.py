@@ -4,7 +4,8 @@ from typing import List
 
 import numpy as np
 
-from .type_def import MaxSatModel, Clause, suppress_stdout
+from .solve import solve_weighted_max_sat, get_value
+from .type_def import MaxSatModel, Clause, suppress_stdout, Instance, Context
 from gurobipy import Model, GRB, quicksum
 
 
@@ -229,7 +230,7 @@ def learn_weighted_max_sat(
 
         print("Found a solution")
         for j in range(m):
-            clause = " \/ ".join([char(l) for l in range(2 * n) if a_jl[j][l].x])
+            clause = " \\/ ".join([char(l) for l in range(2 * n) if a_jl[j][l].x])
             print(f"{'hard' if c_j[j].x else 'soft'}, {w_j[j].x}: " + clause)
 
         # print("Constraints")
@@ -266,13 +267,14 @@ def learn_weighted_max_sat(
         print("No solution found")
 
 
-def example1():
-    # Example
-    # 1.0: A
-    #
-    # pos  A  --
-    # neg !A  --  suboptimal
-    pass
+def label_instance(
+    n: int, model: MaxSatModel, instance: Instance, context: Context
+) -> bool:
+    value = get_value(model, instance)
+    if value is None:
+        return False
+    best_instance = solve_weighted_max_sat(n, model, context)
+    return value >= get_value(model, best_instance)
 
 
 def example2():
