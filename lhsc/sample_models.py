@@ -26,7 +26,9 @@ def _generate_all_clauses_up_to_length(num_vars, length):
     # This makes sure that all symmetries are accounted for...
     must_be = sum(binom(2 * num_vars, l) for l in range(1, length + 1))
     assert len(clauses) == must_be
-
+    
+    #check entailment property of the added constraints
+    
     # ... except for impossible clauses like 'x and not x', let's delete them
     def possible(clause):
         for i in range(len(clause)):

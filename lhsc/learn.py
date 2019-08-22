@@ -268,12 +268,12 @@ def learn_weighted_max_sat(
 
 
 def label_instance(
-    n: int, model: MaxSatModel, instance: Instance, context: Context
+    model: MaxSatModel, instance: Instance, context: Context
 ) -> bool:
     value = get_value(model, instance)
     if value is None:
         return False
-    best_instance = solve_weighted_max_sat(n, model, context)
+    best_instance = solve_weighted_max_sat(len(instance), model, context)
     return value >= get_value(model, best_instance)
 
 
