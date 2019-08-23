@@ -40,16 +40,27 @@ def _generate_all_clauses_up_to_length(num_vars, length):
     return list(sorted(filter(possible, clauses)))
 
 
-def add_context(rng, num_clauses, hard_indices, soft_indices, perc_context):
-
-    num_context = int(np.ceil(num_clauses * perc_context))
-    indices = list(sorted(rng.permutation(num_clauses)))
-    not_hard_indices = list(sorted(set(indices) - set(hard_indices)))
-    context_indices = list(sorted(rng.permutation(not_hard_indices)[:num_context]))
-    return (
-        set(hard_indices).union(set(context_indices)),
-        set(soft_indices).difference(set(context_indices)),
-    )
+def generate_wcnfs(path,models_and_contexts):
+    
+    for i,elem in enumerate(models_and_contexts):
+        model=elem['model']
+        contexts=elem['contexts']
+        
+        wcnf = WCNF()
+        for weight_clause in model:
+            if weight_clause[0]==None:
+                wcnf.append(tuple(weight_clause[1]))
+            else:
+                wcnf.append(tuple(weight_clause[1]), weight=weight_clause[0])
+        wcnf.to_file(path + f"_{i}.wcnf")
+        
+        for j,context in enumerate(contexts):
+            wcnf_context=wcnf.copy()
+            for literals in context:
+                wcnf_context.append((literals,))
+            wcnf_context.to_file(path + f"_{i}_context_{j}.wcnf")
+            
+        
 
 
 def generate_models(
@@ -82,43 +93,31 @@ def generate_models(
 
     print(f"{num_clauses} clauses total - {num_hard} hard and {num_soft} soft")
 
-    #    models = []
+    models_and_contexts = []
     for m in range(num_models):
         print(f"generating model {m + 1} of {num_models}")
-
+        MaxSatModel=[]
         indices = list(sorted(rng.permutation(num_clauses)[:total]))
         hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
         soft_indices = list(sorted(set(indices) - set(hard_indices)))
         assert len(soft_indices) == num_soft
 
         weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
-        wcnf = WCNF()
         for i in hard_indices:
-            wcnf.append(clauses[i])
+            MaxSatModel.append((None,set(clauses[i])))
         for i, weight in zip(soft_indices, weights):
-            wcnf.append(clauses[i], weight=weight)
-        wcnf.to_file(path + f"_{m}.wcnf")
-        #        print(soft_indices,weights)
+            MaxSatModel.append((weight,set(clauses[i])))
+
+        contexts=[]
         for n in range(num_context):
-            hard_indices, soft_indices_context = add_context(
-                rng, num_clauses, hard_indices, soft_indices, perc_context
-            )
-            num_soft = len(soft_indices)
-
-            context_weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
-
-            for i, ind in enumerate(soft_indices_context):
-                if ind in soft_indices:
-                    context_weights[i] = weights[soft_indices.index(ind)]
-
-            #            print(soft_indices,weights)
-            wcnf = WCNF()
-            for i in hard_indices:
-                wcnf.append(clauses[i])
-            for i, weight in zip(soft_indices_context, context_weights):
-                wcnf.append(clauses[i], weight=weight)
-            wcnf.to_file(path + f"_{m}_context_{n}.wcnf")
-
+            indices = list(sorted(rng.permutation(num_clauses)))
+            not_hard_indices = list(sorted(set(indices) - set(hard_indices)))
+            context = set(clauses[rng.permutation(not_hard_indices)[0]])
+            contexts.append(context)
+        models_and_contexts.append({'model':MaxSatModel,'contexts':contexts})
+        
+    generate_wcnfs(path,models_and_contexts)
+    return models_and_contexts
 
 def main():
     import argparse
@@ -132,7 +131,7 @@ def main():
         "--num-models", type=int, default=2, help="Number of models to be generated"
     )
     parser.add_argument(
-        "--num-context", type=int, default=0, help="Number of models to be generated"
+        "--num-context", type=int, default=2, help="Number of models to be generated"
     )
     parser.add_argument("-n", type=int, default=3, help="number of variables")
     parser.add_argument("-k", type=int, default=3, help="length of clauses")
@@ -153,7 +152,7 @@ def main():
     args = parser.parse_args()
 
     rng = np.random.RandomState(args.seed)
-    generate_models(
+    return generate_models(
         args.output,
         args.num_models,
         args.num_context,
