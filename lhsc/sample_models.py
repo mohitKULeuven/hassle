@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import itertools as it
 
+from pysat.examples.fm import FM
 from pysat.formula import WCNF
 from scipy.special import binom
 
@@ -11,6 +12,15 @@ from scipy.special import binom
 # XXX some solvers support integer weights only, let's do that
 _MIN_WEIGHT, _MAX_WEIGHT = 1, 100
 
+
+def is_entailed(wcnf,clause):
+    wcnf_new=wcnf.copy()
+    for literal in clause:
+        wcnf_new.append((-literal,))
+    fm = FM(wcnf_new, verbose=0)
+#    print(wcnf_new.hard,fm.compute())
+    return not fm.compute()
+        
 
 def _generate_all_clauses_up_to_length(num_vars, length):
     flip_or_dont = lambda v: -(v - num_vars) if v > num_vars else v
@@ -61,6 +71,18 @@ def generate_wcnfs(path,models_and_contexts):
             wcnf_context.to_file(path + f"_{i}_context_{j}.wcnf")
             
         
+def get_random_clauses(rng,clauses,n):
+    wcnf = WCNF()
+    selected_indices=[]
+    while n>0:
+        indices=[ind for ind in range(len(clauses)) if ind not in selected_indices]
+        i=rng.choice(indices)
+        if not is_entailed(wcnf,clauses[i]):
+            wcnf.append(clauses[i])
+            selected_indices.append(i)
+            n=n-1
+    return selected_indices
+    
 
 
 def generate_models(
@@ -69,9 +91,8 @@ def generate_models(
     num_context,
     num_vars,
     clause_length,
-    perc_hard,
-    perc_soft,
-    perc_context,
+    num_hard,
+    num_soft,
     pcaq,
     rng,
 ):
@@ -86,8 +107,7 @@ def generate_models(
         quit()
 
     num_clauses = len(clauses)
-    num_hard = int(np.ceil(num_clauses * perc_hard))
-    num_soft = int(np.ceil(num_clauses * perc_soft))
+    
     total = num_hard + num_soft
     assert total > 0
 
@@ -97,7 +117,8 @@ def generate_models(
     for m in range(num_models):
         print(f"generating model {m + 1} of {num_models}")
         MaxSatModel=[]
-        indices = list(sorted(rng.permutation(num_clauses)[:total]))
+        indices=get_random_clauses(rng,clauses,total)
+#        indices = list(sorted(rng.permutation(num_clauses)[:total]))
         hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
         soft_indices = list(sorted(set(indices) - set(hard_indices)))
         assert len(soft_indices) == num_soft
@@ -136,17 +157,17 @@ def main():
     parser.add_argument("-n", type=int, default=3, help="number of variables")
     parser.add_argument("-k", type=int, default=3, help="length of clauses")
     parser.add_argument(
-        "--perc-hard", type=float, default=0.0, help="Number of hard constraints"
+        "--num_hard", type=int, default=1, help="Number of hard constraints"
     )
     parser.add_argument(
-        "--perc-soft", type=float, default=0.1, help="Number of soft constraints"
+        "--num_soft", type=int, default=1, help="Number of soft constraints"
     )
-    parser.add_argument(
-        "--perc-context",
-        type=float,
-        default=0.1,
-        help="Number of constraints in the context",
-    )
+#    parser.add_argument(
+#        "--perc-context",
+#        type=float,
+#        default=0.1,
+#        help="Number of constraints in the context",
+#    )
     parser.add_argument("-q", action="store_true", help="Print the clauses and quit")
     parser.add_argument("-s", "--seed", type=int, default=0, help="RNG seed")
     args = parser.parse_args()
@@ -158,9 +179,8 @@ def main():
         args.num_context,
         args.n,
         args.k,
-        args.perc_hard,
-        args.perc_soft,
-        args.perc_context,
+        args.num_hard,
+        args.num_soft,
         args.q,
         rng,
     )
