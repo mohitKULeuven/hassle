@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 import logging
 
-from .sample_models import generate_models
+from .sample_models import generate_model, generate_contexts
 from .solve import solve_weighted_max_sat, get_value
 from .learn import label_instance
 from .type_def import Instance
@@ -65,29 +65,30 @@ def eval_regret(n: int, true_model: MaxSatModel, learned_model: MaxSatModel):
 
 
 def learn_from_random_model():
-    for seed in [666, 777, 888, 999]:
-        rng = np.random.RandomState(seed)
+    model_seeds = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+    context_seed_start = [101010]
+    for model_seed in model_seeds:
+        rng = np.random.RandomState(model_seed)
         num_hard = 3
         num_soft = 3
         n = 5
         m = num_hard + num_soft
+        clause_length = int(4 / 5 * n)
+
+        true_model = generate_model(n, clause_length, num_hard, num_soft, rng)
+        true_model = [(w / 100 if w else None, clause) for w, clause in true_model]
+        print(f"True Model\n{model_to_string(true_model)}")
+
         contexts_count = 10
-        models_and_contexts = generate_models(
-            None, 1, contexts_count, n, 4, num_hard, num_soft, False, rng
-        )
-        true_model = [
-            (w / 100 if w else None, clause)
-            for w, clause in models_and_contexts[0]["model"]
-        ]
-        contexts = models_and_contexts[0]["contexts"]
-        print(true_model)
-        print(contexts[0])
+        rng = np.random.RandomState(context_seed_start)
+        contexts = generate_contexts(true_model, contexts_count, 1, n, rng)
 
         data = []
         labels = []
         contexts_to_learn = []
 
         for context in contexts:
+            print("Context:", context)
             add_negative = True
             for positive in [True, False]:
                 instance = get_instance(n, true_model, context, positive, rng)
@@ -105,7 +106,6 @@ def learn_from_random_model():
         labels = np.array(labels)
 
         learned_model = learn_weighted_max_sat(m, data, labels, contexts_to_learn)
-        print(f"True Model\n{model_to_string(true_model)}")
         print(f"Learned model\n{model_to_string(learned_model)}")
 
         for k in range(data.shape[0]):
