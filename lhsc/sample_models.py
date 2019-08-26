@@ -9,7 +9,7 @@ from pysat.formula import WCNF
 from scipy.special import binom
 from typing import List
 
-from .type_def import MaxSatModel
+from type_def import MaxSatModel
 
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ def get_random_clauses(wcnf, rng, clauses, n):
 def generate_contexts(model: MaxSatModel, num_context, num_constraints, num_vars, rng):
     wcnf = WCNF()
     for clauses in model:
+        #        print(clauses[1])
         wcnf.append(tuple(clauses[1]))
     contexts = []
     #    n=0
@@ -109,9 +110,10 @@ def generate_contexts(model: MaxSatModel, num_context, num_constraints, num_vars
             literals.append({i})
             literals.append({-i})
         #        print(literals)
-        contexts.append(get_random_clauses(wcnf, rng, literals, num_constraints))
-    print(num_vars, contexts)
-    exit()
+        indices = get_random_clauses(wcnf, rng, literals, num_constraints)
+        contexts.append([literals[j] for j in indices])
+    #    print(num_vars, contexts)
+    #    exit()
     return contexts
 
 
@@ -174,16 +176,12 @@ def generate_models_and_contexts(
         contexts = generate_contexts(
             model, num_context, num_context_constraints, num_vars, rng
         )
-        #        for n in range(num_context):
-        #            indices = list(sorted(rng.permutation(num_clauses)))
-        #            not_hard_indices = list(sorted(set(indices) - set(hard_indices)))
-        #            context = set(clauses[rng.permutation(not_hard_indices)[0]])
-        #            contexts.append(context)
         models_and_contexts.append(
             {"model": model, "contexts": contexts, "n": num_vars}
         )
 
     generate_wcnfs(path, models_and_contexts)
+    #    print(models_and_contexts)
     return models_and_contexts
 
 
@@ -226,18 +224,10 @@ def main():
     args = parser.parse_args()
 
     rng = np.random.RandomState(args.seed)
-    return generate_models(
-        args.output,
-        args.num_models,
-        args.num_context,
-        args.num_context_constraints,
-        args.n,
-        args.k,
-        args.num_hard,
-        args.num_soft,
-        args.q,
-        rng,
-    )
+    for model in generate_models(
+        args.num_models, args.n, args.k, args.num_hard, args.num_soft, rng
+    ):
+        generate_contexts(model, args.num_context, 2, args.n, rng)
 
 
 if __name__ == "__main__":
