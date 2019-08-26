@@ -1,5 +1,6 @@
 # noinspection PyUnresolvedReferences
 import os
+import logging
 from typing import List
 
 import numpy as np
@@ -7,6 +8,9 @@ import numpy as np
 from .solve import solve_weighted_max_sat, get_value
 from .type_def import MaxSatModel, Clause, suppress_stdout, Instance, Context
 from gurobipy import Model, GRB, quicksum
+
+
+logger = logging.getLogger(__name__)
 
 
 def learn_weighted_max_sat(
@@ -45,12 +49,11 @@ def learn_weighted_max_sat(
         context_indices.append(context_pool[key])
     context_counts = len(context_pool)
 
-    print(w_max_value)
-    print(s)
-    print(n)
-    print(m)
-    print(context_indices)
-    print(context_counts)
+    logger.debug("Learn wMaxSAT")
+    logger.debug("w_max", w_max_value)
+    logger.debug("s", s)
+    logger.debug("n", n)
+    logger.debug("m", m)
 
     with suppress_stdout():
         mod = Model("LearnMaxSat")
@@ -228,18 +231,18 @@ def learn_weighted_max_sat(
         def char_feature(_i, val):
             return (" " if val else "!") + "abcdefghijklmnop"[abs(_i)].capitalize()
 
-        print("Found a solution")
-        for j in range(m):
-            clause = " \\/ ".join([char(l) for l in range(2 * n) if a_jl[j][l].x])
-            print(f"{'hard' if c_j[j].x else 'soft'}, {w_j[j].x}: " + clause)
+        # print("Found a solution")
+        # for j in range(m):
+        #     clause = " \\/ ".join([char(l) for l in range(2 * n) if a_jl[j][l].x])
+        #     print(f"{'hard' if c_j[j].x else 'soft'}, {w_j[j].x}: " + clause)
 
         # print("Constraints")
         # for j in range(m):
         #     print(*[a_jl[j][l].x for l in range(2 * n)])
 
-        print("Examples")
+        logger.info("Learning results")
         for k in range(s):
-            print(
+            logger.info(
                 " : ".join(
                     [
                         (" sat" if cov_k[k].x else "!sat"),
@@ -259,22 +262,35 @@ def learn_weighted_max_sat(
         return [
             (
                 None if c_j[j].x else w_j[j].x,
-                {l + 1 if l < n else -(l + 1) for l in range(2 * n) if a_jl[j][l]},
+                {
+                    l + 1 if l < n else -(l - n + 1)
+                    for l in range(2 * n)
+                    if a_jl[j][l].x
+                },
             )
             for j in range(m)
         ]
     else:
-        print("No solution found")
+        pass
 
 
-def label_instance(
-    model: MaxSatModel, instance: Instance, context: Context
-) -> bool:
+def label_instance(model: MaxSatModel, instance: Instance, context: Context) -> bool:
     value = get_value(model, instance)
     if value is None:
         return False
     best_instance = solve_weighted_max_sat(len(instance), model, context)
     return value >= get_value(model, best_instance)
+
+
+def check_learned_model(
+    model: MaxSatModel, data: np.ndarray, labels: np.ndarray, contexts: List[Context]
+):
+    s = data.shape[0]
+    assert s == len(labels) == len(contexts)
+    for k in range(s):
+        if labels[k] != label_instance(model, data[k, :], contexts[k]):
+            return False
+    return True
 
 
 def example2():

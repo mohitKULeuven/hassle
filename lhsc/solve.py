@@ -7,7 +7,13 @@ from .type_def import MaxSatModel, Clause, suppress_stdout, Instance
 from gurobipy import Model, GRB, quicksum
 
 
-def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Instance:
+def solve_weighted_max_sat(
+    n: int, model: MaxSatModel, context: Clause
+) -> Optional[Instance]:
+
+    if any(w and (w > 1 or w < 0) for w, _ in model):
+        raise AttributeError("Weights must be between in the interval [0, 1]")
+
     with suppress_stdout():
         mod = Model("MaxSat")
 
@@ -49,7 +55,9 @@ def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Insta
             mod.addConstr(cov_j[j] >= 1, name=f"cov_{j} >= 1")
         else:
             # Weight is 0 if clause is not covered, and weight otherwise
-            mod.addConstr(w_j[j] == weight * cov_j[j], name=f"w_{j} <= {weight}")
+            mod.addConstr(
+                w_j[j] == weight * cov_j[j], name=f"w_{j} = {weight} * cov_{j}"
+            )
 
     for i in context:
         # Fix values given by context
@@ -63,15 +71,8 @@ def solve_weighted_max_sat(n: int, model: MaxSatModel, context: Clause) -> Insta
     mod.optimize()
 
     if mod.status == GRB.Status.OPTIMAL:
-        print("Found a solution")
-        print(
-            f"{sum(w_j[j].x for j in range(m))}:",
-            *[f"{x_l[l].x}" for l in range(n)],
-            sep=" ",
-        )
-        return np.array([x_l[l] for l in range(n)])
+        return np.array([x_l[l].x for l in range(n)])
     else:
-        print("No solution found")
         return None
 
 
