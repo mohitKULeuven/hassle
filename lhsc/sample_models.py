@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import pickle
 import numpy as np
 import itertools as it
 
@@ -66,29 +65,52 @@ def generate_wcnfs(path,models_and_contexts):
         
         for j,context in enumerate(contexts):
             wcnf_context=wcnf.copy()
+#            print(context)
             for literals in context:
                 wcnf_context.append((literals,))
             wcnf_context.to_file(path + f"_{i}_context_{j}.wcnf")
             
         
-def get_random_clauses(rng,clauses,n):
-    wcnf = WCNF()
+def get_random_clauses(wcnf,rng,clauses,n):
+#    wcnf = WCNF()
     selected_indices=[]
+    checked_indices=[]
     while n>0:
-        indices=[ind for ind in range(len(clauses)) if ind not in selected_indices]
+        indices=[ind for ind in range(len(clauses)) if ind not in checked_indices]
         i=rng.choice(indices)
+        checked_indices.append(i)
         if not is_entailed(wcnf,clauses[i]):
             wcnf.append(clauses[i])
             selected_indices.append(i)
             n=n-1
+        if len(checked_indices)==len(clauses):
+            break
+        
     return selected_indices
     
 
+def generate_contexts(MaxSatModel,num_context,num_constraints,num_vars,rng):
+    wcnf = WCNF()
+    for clauses in MaxSatModel:
+        wcnf.append(tuple(clauses[1]))
+    contexts=[]
+#    n=0
+    for n in range(num_context):
+        if num_constraints==0:
+            num_constraints=rng.randint(1,2*num_vars)
+        literals=[]
+        for i in range(1,1+num_vars):
+            literals.append({i})
+            literals.append({-i})
+#        print(literals)
+        contexts.append(get_random_clauses(wcnf,rng,literals,num_constraints))
+    return contexts
 
 def generate_models(
     path,
     num_models,
     num_context,
+    num_context_constraints,
     num_vars,
     clause_length,
     num_hard,
@@ -117,7 +139,8 @@ def generate_models(
     for m in range(num_models):
         print(f"generating model {m + 1} of {num_models}")
         MaxSatModel=[]
-        indices=get_random_clauses(rng,clauses,total)
+        wcnf = WCNF()
+        indices=get_random_clauses(wcnf,rng,clauses,total)
 #        indices = list(sorted(rng.permutation(num_clauses)[:total]))
         hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
         soft_indices = list(sorted(set(indices) - set(hard_indices)))
@@ -129,13 +152,13 @@ def generate_models(
         for i, weight in zip(soft_indices, weights):
             MaxSatModel.append((weight,set(clauses[i])))
 
-        contexts=[]
-        for n in range(num_context):
-            indices = list(sorted(rng.permutation(num_clauses)))
-            not_hard_indices = list(sorted(set(indices) - set(hard_indices)))
-            context = set(clauses[rng.permutation(not_hard_indices)[0]])
-            contexts.append(context)
-        models_and_contexts.append({'model':MaxSatModel,'contexts':contexts})
+        contexts=generate_contexts(MaxSatModel,num_context,num_context_constraints,num_vars,rng)
+#        for n in range(num_context):
+#            indices = list(sorted(rng.permutation(num_clauses)))
+#            not_hard_indices = list(sorted(set(indices) - set(hard_indices)))
+#            context = set(clauses[rng.permutation(not_hard_indices)[0]])
+#            contexts.append(context)
+        models_and_contexts.append({'model':MaxSatModel,'contexts':contexts,'n':num_vars})
         
     generate_wcnfs(path,models_and_contexts)
     return models_and_contexts
@@ -149,10 +172,13 @@ def main():
         "-o", "--output", type=str, default="model", help="Path to the output file"
     )
     parser.add_argument(
-        "--num-models", type=int, default=2, help="Number of models to be generated"
+        "--num_models", type=int, default=2, help="Number of models to be generated"
     )
     parser.add_argument(
-        "--num-context", type=int, default=2, help="Number of models to be generated"
+        "--num_context", type=int, default=1, help="Number of models to be generated"
+    )
+    parser.add_argument(
+        "--num_context_constraints", type=int, default=2, help="Number of constraints in each context"
     )
     parser.add_argument("-n", type=int, default=3, help="number of variables")
     parser.add_argument("-k", type=int, default=3, help="length of clauses")
@@ -177,6 +203,7 @@ def main():
         args.output,
         args.num_models,
         args.num_context,
+        args.num_context_constraints,
         args.n,
         args.k,
         args.num_hard,
