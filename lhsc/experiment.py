@@ -88,7 +88,7 @@ def learn_from_random_model():
         contexts_to_learn = []
 
         for context in contexts:
-            print("Context:", context)
+            # print("Context:", context)
             add_negative = True
             for positive in [True, False]:
                 instance = get_instance(n, true_model, context, positive, rng)
@@ -99,8 +99,8 @@ def learn_from_random_model():
                     data.append(instance)
                     labels.append(positive)
                     contexts_to_learn.append(context)
-                    print(instance, positive, context)
-        print()
+                    # print(instance, positive, context)
+        # print()
 
         data = np.array(data)
         labels = np.array(labels)

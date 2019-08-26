@@ -9,7 +9,7 @@ from pysat.formula import WCNF
 from scipy.special import binom
 from typing import List
 
-from type_def import MaxSatModel
+from .type_def import MaxSatModel
 
 
 logger = logging.getLogger(__name__)
@@ -103,6 +103,7 @@ def generate_contexts(model: MaxSatModel, num_context, num_constraints, num_vars
     contexts = []
     #    n=0
     for n in range(num_context):
+        context = set()
         if num_constraints == 0:
             num_constraints = rng.randint(1, 2 * num_vars)
         literals = []
@@ -111,7 +112,9 @@ def generate_contexts(model: MaxSatModel, num_context, num_constraints, num_vars
             literals.append({-i})
         #        print(literals)
         indices = get_random_clauses(wcnf, rng, literals, num_constraints)
-        contexts.append([literals[j] for j in indices])
+        for j in indices:
+            context |= literals[j]
+        contexts.append(context)
     #    print(num_vars, contexts)
     #    exit()
     return contexts
