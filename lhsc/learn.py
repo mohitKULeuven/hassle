@@ -38,14 +38,16 @@ def learn_weighted_max_sat(
     s = data.shape[0]
     n = data.shape[1]
     big_m = 10000
-    epsilon = 10 ** (-3)
+    epsilon = 10 ** (-4)
 
     context_pool = dict()
+    unique_contexts = []
     context_indices = []
     for context in contexts:
         key = frozenset(context)
         if key not in context_pool:
             context_pool[key] = len(context_pool)
+            unique_contexts.append(context)
         context_indices.append(context_pool[key])
     context_counts = len(context_pool)
 
@@ -72,6 +74,7 @@ def learn_weighted_max_sat(
         mod.addVar(vtype=GRB.CONTINUOUS, lb=0, ub=w_max_value, name=f"w_{j})")
         for j in range(m)
     ]
+    wz_j = [mod.addVar(vtype=GRB.BINARY, name=f"wz_{j})") for j in range(m)]
 
     # Auxiliary decision variabnles
     gamma_context = [
@@ -102,12 +105,133 @@ def learn_weighted_max_sat(
         for j in range(m)
     ]
 
+    # Extra variables
+    cov_o = [
+        mod.addVar(vtype=GRB.BINARY, name=f"cov_{o}") for o in range(context_counts)
+    ]
+    ccov_o = [
+        mod.addVar(vtype=GRB.BINARY, name=f"ccov_{o}") for o in range(context_counts)
+    ]
+    cov_oj = [
+        [mod.addVar(vtype=GRB.BINARY, name=f"cov_[{o}, {j}]") for j in range(m)]
+        for o in range(context_counts)
+    ]
+    covp_oj = [
+        [mod.addVar(vtype=GRB.BINARY, name=f"covp_[{o}, {j}]") for j in range(m)]
+        for o in range(context_counts)
+    ]
+    cov_ojl = [
+        [
+            [
+                mod.addVar(vtype=GRB.BINARY, name=f"cov_[{o}, {j}, {l}]")
+                for l in range(2 * n)
+            ]
+            for j in range(m)
+        ]
+        for o in range(context_counts)
+    ]
+    xp_ol = [
+        [mod.addVar(vtype=GRB.BINARY, name=f"xp_[{o},{l}]") for l in range(n)]
+        for o in range(context_counts)
+    ]
+    w_oj = [
+        [
+            mod.addVar(vtype=GRB.CONTINUOUS, lb=0, ub=1, name=f"w_[{o}, {j}]")
+            for j in range(m)
+        ]
+        for o in range(context_counts)
+    ]
+
     mod.setObjective(
         quicksum([gamma_context[context] for context in range(context_counts)]),
         GRB.MAXIMIZE,
     )
 
+    # Constraints on x_prime
+    for o in range(context_counts):
+        context = unique_contexts[o]
+        for index in context:
+            if index < 0:
+                mod.addConstr(ccov_o[o] <= (1 - xp_ol[o][abs(index) - 1]))
+            else:
+                mod.addConstr(ccov_o[o] <= xp_ol[o][index - 1])
+
+        mod.addConstr(
+            ccov_o[o]
+            >= quicksum(
+                xp_ol[o][index - 1] if index > 0 else (1 - xp_ol[o][abs(index) - 1])
+                for index in context
+            )
+            - len(context)
+            + 1
+        )
+
+    for o in range(context_counts):
+        for j in range(m):
+            for l in range(2 * n):
+                mod.addConstr(cov_ojl[o][j][l] <= a_jl[j][l])
+                if l < n:
+                    x_covered = xp_ol[o][l]
+                else:
+                    x_covered = 1 - xp_ol[o][l - n]
+                mod.addConstr(cov_ojl[o][j][l] <= x_covered)
+                mod.addConstr(cov_ojl[o][j][l] >= a_jl[j][l] + x_covered - 1)
+
+    for o in range(context_counts):
+        for j in range(m):
+            for l in range(2 * n):
+                mod.addConstr(cov_oj[o][j] >= cov_ojl[o][j][l])
+            mod.addConstr(
+                cov_oj[o][j] <= quicksum(cov_ojl[o][j][l] for l in range(2 * n))
+            )
+
+    for o in range(context_counts):
+        for j in range(m):
+            mod.addConstr(covp_oj[o][j] >= cov_oj[o][j])
+            mod.addConstr(covp_oj[o][j] >= (1 - c_j[j]))
+            mod.addConstr(covp_oj[o][j] <= cov_oj[o][j] + (1 - c_j[j]))
+
+    for o in range(context_counts):
+        mod.addConstr(cov_o[o] <= ccov_o[o])
+        for j in range(m):
+            mod.addConstr(cov_o[o] <= covp_oj[o][j])
+        mod.addConstr(
+            cov_o[o] >= quicksum(covp_oj[o][j] for j in range(m)) + ccov_o[o] - m
+        )
+
+    for o in range(context_counts):
+        for j in range(m):
+            mod.addConstr(w_oj[o][j] <= cov_oj[o][j])
+            mod.addConstr(w_oj[o][j] <= (1 - c_j[j]))
+            mod.addConstr(w_oj[o][j] <= w_j[j] + (1 - cov_oj[o][j]) + c_j[j])
+            mod.addConstr(w_oj[o][j] >= w_j[j] - (1 - cov_oj[o][j]) - c_j[j])
+
+    for o in range(context_counts):
+        mod.addConstr(gamma_context[o] <= quicksum([w_oj[o][j] for j in range(m)]))
+        mod.addConstr(
+            gamma_context[o] <= cov_o[o]
+        )  # TODO Consider whether we need it? What about opt_k in infeasible contexts?
+
+        # mod.addConstr(
+        #     gamma_context[o]
+        #     >= quicksum([w_oj[o][j] for j in range(m)]) + epsilon - big_m * opt_o[o]
+        # )
+
+    # Positive / negative constraints with contexts
+    for k in range(s):
+        mod.addConstr(cov_k[k] <= cov_o[context_indices[k]])
+        if labels[k]:
+            mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] == 3)
+        else:
+            mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] <= 2)
+
     # Constraints for weights
+    for j in range(m):
+        mod.addConstr(
+            w_j[j] <= (1 - wz_j[j])
+        )  # TODO What about setting w > 2epsilon for soft constraints?
+        mod.addConstr(w_j[j] >= 2 * epsilon - wz_j[j])
+
     for j in range(m):
         for k in range(s):
             mod.addConstr(
@@ -213,11 +337,11 @@ def learn_weighted_max_sat(
     # mod.addConstr(c_j[0] >= 1, name="Forcing the first constraint to be hard")
 
     # Positive / negative constraints
-    for k in range(s):
-        if labels[k]:
-            mod.addConstr(cov_k[k] + opt_k[k] >= 2, name=f"cov_{k} + opt_{k} >= 2")
-        else:
-            mod.addConstr(cov_k[k] + opt_k[k] <= 1, name=f"cov_{k} + opt_{k} <= 1")
+    # for k in range(s):
+    #     if labels[k]:
+    #         mod.addConstr(cov_k[k] + opt_k[k] >= 2, name=f"cov_{k} + opt_{k} >= 2")
+    #     else:
+    #         mod.addConstr(cov_k[k] + opt_k[k] <= 1, name=f"cov_{k} + opt_{k} <= 1")
 
     mod.optimize()
 
@@ -256,6 +380,16 @@ def learn_weighted_max_sat(
                             (" sat'" if covp_jk[j][k].x else "!sat'") for j in range(m)
                         ),
                     ]
+                )
+            )
+
+        for o in range(context_counts):
+            logger.info(f"Context: {unique_contexts[o]}")
+            logger.info(
+                "  ".join(
+                    [str(xp_ol[o][l].x) for l in range(n)]
+                    + [str(gamma_context[o].x)]
+                    + [f"{w_oj[o][j].x} ({wz_j[j].x})" for j in range(m)]
                 )
             )
 
