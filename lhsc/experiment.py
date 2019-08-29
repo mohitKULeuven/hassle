@@ -93,7 +93,9 @@ def get_data_set(
 
 
 def learn_from_random_model():
+    logging.basicConfig(level=logging.INFO)
     model_seeds = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+    model_seeds = [111]
     context_seed_start = [101010]
     for model_seed in model_seeds:
         rng = np.random.RandomState(model_seed)
@@ -168,5 +170,5 @@ def learn_hard_constraints():
 
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.INFO)
-    # learn_from_random_model()
-    learn_hard_constraints()
+    learn_from_random_model()
+    # learn_hard_constraints()
