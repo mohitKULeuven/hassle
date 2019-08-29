@@ -168,5 +168,5 @@ def learn_hard_constraints():
 
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.INFO)
-    learn_from_random_model()
-    # learn_hard_constraints()
+    # learn_from_random_model()
+    learn_hard_constraints()
