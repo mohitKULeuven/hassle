@@ -37,8 +37,8 @@ def learn_weighted_max_sat(
     w_max_value = 1
     s = data.shape[0]
     n = data.shape[1]
-    big_m = 10000
-    epsilon = 10 ** (-4)
+    big_m = 2 * (m + 1)
+    epsilon = 10 ** (-2)
 
     context_pool = dict()
     unique_contexts = []
@@ -52,10 +52,10 @@ def learn_weighted_max_sat(
     context_counts = len(context_pool)
 
     logger.debug("Learn wMaxSAT")
-    logger.debug("w_max", w_max_value)
-    logger.debug("s", s)
-    logger.debug("n", n)
-    logger.debug("m", m)
+    logger.debug(f"w_max: {w_max_value}")
+    logger.debug(f"s: {s}")
+    logger.debug(f"n: {n}")
+    logger.debug(f"m: {m}")
 
     with suppress_stdout():
         mod = Model("LearnMaxSat")
@@ -209,7 +209,7 @@ def learn_weighted_max_sat(
     for o in range(context_counts):
         mod.addConstr(gamma_context[o] <= quicksum([w_oj[o][j] for j in range(m)]))
         mod.addConstr(
-            gamma_context[o] <= cov_o[o]
+            gamma_context[o] <= cov_o[o] * big_m
         )  # TODO Consider whether we need it? What about opt_k in infeasible contexts?
 
         # mod.addConstr(
@@ -230,7 +230,7 @@ def learn_weighted_max_sat(
         mod.addConstr(
             w_j[j] <= (1 - wz_j[j])
         )  # TODO What about setting w > 2epsilon for soft constraints?
-        mod.addConstr(w_j[j] >= 2 * epsilon - wz_j[j])
+        mod.addConstr(w_j[j] >= 3 * epsilon - wz_j[j])
 
     for j in range(m):
         for k in range(s):
@@ -384,12 +384,12 @@ def learn_weighted_max_sat(
             )
 
         for o in range(context_counts):
-            logger.info(f"Context: {unique_contexts[o]}")
+            logger.info(f"Context {o}: {unique_contexts[o]}")
             logger.info(
                 "  ".join(
-                    [str(xp_ol[o][l].x) for l in range(n)]
-                    + [str(gamma_context[o].x)]
-                    + [f"{w_oj[o][j].x} ({wz_j[j].x})" for j in range(m)]
+                    [f"xpo[{l}] {xp_ol[o][l].x}" for l in range(n)]
+                    + [f"gamma {gamma_context[o].x}"]
+                    + [f"wo[{j}] {w_oj[o][j].x} ({wz_j[j].x})" for j in range(m)]
                 )
             )
 
@@ -413,7 +413,9 @@ def label_instance(model: MaxSatModel, instance: Instance, context: Context) -> 
     if value is None:
         return False
     best_instance = solve_weighted_max_sat(len(instance), model, context)
-    return value >= get_value(model, best_instance)
+    best_value = get_value(model, best_instance)
+    logger.debug(f"Best instance: {best_value} - {best_instance}")
+    return value >= best_value
 
 
 def check_learned_model(

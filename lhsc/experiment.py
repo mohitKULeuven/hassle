@@ -3,6 +3,8 @@ from typing import Optional, List
 import numpy as np
 import logging
 
+from tabulate import tabulate
+
 from .sample_models import generate_model, generate_contexts
 from .solve import solve_weighted_max_sat, get_value
 from .learn import label_instance
@@ -36,6 +38,21 @@ def model_to_string(model: MaxSatModel):
             f"{0.0 if weight is None else weight}: {clause}\n"
         )
     return result
+
+
+def context_to_string(context: Context):
+    # noinspection SpellCheckingInspection
+    letters = "abcdefghijklmnopqrstuvwxyz".upper()
+
+    def char(_l):
+        if _l < 0:
+            return f"!{letters[-_l - 1]}"
+        else:
+            return letters[_l - 1]
+
+    return " /\\ ".join(
+        char(l) for l in sorted(context, key=lambda x: (abs(x), 0 if x > 0 else 1))
+    )
 
 
 def get_instance(n, model, context, positive, rng) -> Optional[Instance]:
@@ -87,14 +104,29 @@ def get_data_set(
                 contexts_to_learn.append(context)
                 # print(instance, positive, context)
 
-    data = np.array(data)
+    data = np.array(data).astype(np.int)
     labels = np.array(labels)
     return data, labels, contexts_to_learn
 
 
+def random_contexts(
+    n, num_contexts, min_num_literals, max_num_literals, rng, max_tries=10
+):
+    result = set()
+    for _ in range(max_tries * num_contexts):
+        choices = list(range(n))
+        num_literals = rng.randint(min_num_literals, max_num_literals + 1)
+        selected = rng.choice(np.array(choices), size=num_literals, replace=False) + 1
+        selected *= np.sign(rng.random(len(selected)) - 0.5).astype(np.int)
+        result.add(frozenset(list(selected)))
+        if len(result) >= num_contexts:
+            break
+    return [set(c) for c in result]
+
+
 def learn_from_random_model():
-    logging.basicConfig(level=logging.INFO)
-    model_seeds = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+    logging.basicConfig(level=logging.DEBUG)
+    # model_seeds = [111, 222, 333, 444, 555, 666, 777, 888, 999]
     model_seeds = [111]
     context_seed_start = [101010]
     for model_seed in model_seeds:
@@ -103,35 +135,55 @@ def learn_from_random_model():
         num_soft = 3
         n = 10
         m = num_hard + num_soft
-        clause_length = int(4 / 5 * n)
+        clause_length = max(2, int(1 / 5 * n))
 
         true_model = generate_model(n, clause_length, num_hard, num_soft, rng)
         true_model = [(w / 100 if w else None, clause) for w, clause in true_model]
         print(f"True Model\n{model_to_string(true_model)}")
 
-        contexts_count = 50
+        contexts_count = 20
         rng = np.random.RandomState(context_seed_start)
-        contexts = generate_contexts(true_model, contexts_count, 1, n, rng)
+        contexts = random_contexts(n, contexts_count, 1, max(1, int(3 * n / 5)), rng)
+
+        for context in contexts:
+            # print(f"Context {context_to_string(context)}")
+            solution = solve_weighted_max_sat(n, true_model, context)
+            # print(f"Solution {solution}")
+
+            if solution is None:
+                print(f"INFEASIBLE CONTEXT {context_to_string(context)}")
 
         data, labels, learning_contexts = get_data_set(
             n, true_model, contexts, rng, allow_negative=True
         )
 
+        if logger.isEnabledFor(logging.INFO):
+            overview = [
+                [
+                    f"{context_to_string(learning_contexts[k])}",
+                    f"{data[k, :]}",
+                    f"{labels[k]}",
+                ]
+                for k in range(len(labels))
+            ]
+            print(tabulate(overview))
+
         learned_model = learn_weighted_max_sat(m, data, labels, learning_contexts)
         print(f"Learned model\n{model_to_string(learned_model)}")
 
-        for k in range(data.shape[0]):
-            instance = data[k, :]
-            label = labels[k]
-            learned_label = label_instance(
-                learned_model, instance, learning_contexts[k]
-            )
-            if label != learned_label:
-                logger.warning(
-                    f"{instance} labeled {learned_label} instead of {label} (learned / true)"
+        if learned_model:
+            for k in range(data.shape[0]):
+                instance = data[k, :]
+                label = labels[k]
+                learned_label = label_instance(
+                    learned_model, instance, learning_contexts[k]
                 )
+                if label != learned_label:
+                    logger.warning(
+                        f"{instance} labeled {learned_label} instead of {label} (learned / true)"
+                    )
 
-        print("REGRET ", eval_regret(n, true_model, learned_model))
+            print("REGRET ", eval_regret(n, true_model, learned_model))
 
 
 def learn_hard_constraints():
