@@ -51,6 +51,12 @@ def learn_weighted_max_sat(
         context_indices.append(context_pool[key])
     context_counts = len(context_pool)
 
+    contexts_with_positive = set()
+    for k in range(s):
+        if labels[k]:
+            contexts_with_positive.add(context_indices[k])
+    skip_positive_contexts = True
+
     logger.debug("Learn wMaxSAT")
     logger.debug(f"w_max: {w_max_value}")
     logger.debug(f"s: {s}")
@@ -149,68 +155,75 @@ def learn_weighted_max_sat(
 
     # Constraints on x_prime
     for o in range(context_counts):
-        context = unique_contexts[o]
-        for index in context:
-            if index < 0:
-                mod.addConstr(ccov_o[o] <= (1 - xp_ol[o][abs(index) - 1]))
-            else:
-                mod.addConstr(ccov_o[o] <= xp_ol[o][index - 1])
-
-        mod.addConstr(
-            ccov_o[o]
-            >= quicksum(
-                xp_ol[o][index - 1] if index > 0 else (1 - xp_ol[o][abs(index) - 1])
-                for index in context
-            )
-            - len(context)
-            + 1
-        )
-
-    for o in range(context_counts):
-        for j in range(m):
-            for l in range(2 * n):
-                mod.addConstr(cov_ojl[o][j][l] <= a_jl[j][l])
-                if l < n:
-                    x_covered = xp_ol[o][l]
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            context = unique_contexts[o]
+            for index in context:
+                if index < 0:
+                    mod.addConstr(ccov_o[o] <= (1 - xp_ol[o][abs(index) - 1]))
                 else:
-                    x_covered = 1 - xp_ol[o][l - n]
-                mod.addConstr(cov_ojl[o][j][l] <= x_covered)
-                mod.addConstr(cov_ojl[o][j][l] >= a_jl[j][l] + x_covered - 1)
+                    mod.addConstr(ccov_o[o] <= xp_ol[o][index - 1])
 
-    for o in range(context_counts):
-        for j in range(m):
-            for l in range(2 * n):
-                mod.addConstr(cov_oj[o][j] >= cov_ojl[o][j][l])
             mod.addConstr(
-                cov_oj[o][j] <= quicksum(cov_ojl[o][j][l] for l in range(2 * n))
+                ccov_o[o]
+                >= quicksum(
+                    xp_ol[o][index - 1] if index > 0 else (1 - xp_ol[o][abs(index) - 1])
+                    for index in context
+                )
+                - len(context)
+                + 1
             )
 
     for o in range(context_counts):
-        for j in range(m):
-            mod.addConstr(covp_oj[o][j] >= cov_oj[o][j])
-            mod.addConstr(covp_oj[o][j] >= (1 - c_j[j]))
-            mod.addConstr(covp_oj[o][j] <= cov_oj[o][j] + (1 - c_j[j]))
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            for j in range(m):
+                for l in range(2 * n):
+                    mod.addConstr(cov_ojl[o][j][l] <= a_jl[j][l])
+                    if l < n:
+                        x_covered = xp_ol[o][l]
+                    else:
+                        x_covered = 1 - xp_ol[o][l - n]
+                    mod.addConstr(cov_ojl[o][j][l] <= x_covered)
+                    mod.addConstr(cov_ojl[o][j][l] >= a_jl[j][l] + x_covered - 1)
 
     for o in range(context_counts):
-        mod.addConstr(cov_o[o] <= ccov_o[o])
-        for j in range(m):
-            mod.addConstr(cov_o[o] <= covp_oj[o][j])
-        mod.addConstr(
-            cov_o[o] >= quicksum(covp_oj[o][j] for j in range(m)) + ccov_o[o] - m
-        )
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            for j in range(m):
+                for l in range(2 * n):
+                    mod.addConstr(cov_oj[o][j] >= cov_ojl[o][j][l])
+                mod.addConstr(
+                    cov_oj[o][j] <= quicksum(cov_ojl[o][j][l] for l in range(2 * n))
+                )
 
     for o in range(context_counts):
-        for j in range(m):
-            mod.addConstr(w_oj[o][j] <= cov_oj[o][j])
-            mod.addConstr(w_oj[o][j] <= (1 - c_j[j]))
-            mod.addConstr(w_oj[o][j] <= w_j[j] + (1 - cov_oj[o][j]) + c_j[j])
-            mod.addConstr(w_oj[o][j] >= w_j[j] - (1 - cov_oj[o][j]) - c_j[j])
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            for j in range(m):
+                mod.addConstr(covp_oj[o][j] >= cov_oj[o][j])
+                mod.addConstr(covp_oj[o][j] >= (1 - c_j[j]))
+                mod.addConstr(covp_oj[o][j] <= cov_oj[o][j] + (1 - c_j[j]))
 
     for o in range(context_counts):
-        mod.addConstr(gamma_context[o] <= quicksum([w_oj[o][j] for j in range(m)]))
-        mod.addConstr(
-            gamma_context[o] <= cov_o[o] * big_m
-        )  # TODO Consider whether we need it? What about opt_k in infeasible contexts?
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            mod.addConstr(cov_o[o] <= ccov_o[o])
+            for j in range(m):
+                mod.addConstr(cov_o[o] <= covp_oj[o][j])
+            mod.addConstr(
+                cov_o[o] >= quicksum(covp_oj[o][j] for j in range(m)) + ccov_o[o] - m
+            )
+
+    for o in range(context_counts):
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            for j in range(m):
+                mod.addConstr(w_oj[o][j] <= cov_oj[o][j])
+                mod.addConstr(w_oj[o][j] <= (1 - c_j[j]))
+                mod.addConstr(w_oj[o][j] <= w_j[j] + (1 - cov_oj[o][j]) + c_j[j])
+                mod.addConstr(w_oj[o][j] >= w_j[j] - (1 - cov_oj[o][j]) - c_j[j])
+
+    for o in range(context_counts):
+        if not (skip_positive_contexts and o in contexts_with_positive):
+            mod.addConstr(gamma_context[o] <= quicksum([w_oj[o][j] for j in range(m)]))
+            mod.addConstr(
+                gamma_context[o] <= cov_o[o] * big_m
+            )  # TODO Consider whether we need it? What about opt_k in infeasible contexts?
 
         # mod.addConstr(
         #     gamma_context[o]
@@ -219,11 +232,20 @@ def learn_weighted_max_sat(
 
     # Positive / negative constraints with contexts
     for k in range(s):
-        mod.addConstr(cov_k[k] <= cov_o[context_indices[k]])
-        if labels[k]:
-            mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] == 3)
+        if not (
+            skip_positive_contexts and context_indices[k] in contexts_with_positive
+        ):
+            mod.addConstr(cov_k[k] <= cov_o[context_indices[k]])
+
+            if labels[k]:
+                mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] == 3)
+            else:
+                mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] <= 2)
         else:
-            mod.addConstr(cov_o[context_indices[k]] + cov_k[k] + opt_k[k] <= 2)
+            if labels[k]:
+                mod.addConstr(cov_k[k] + opt_k[k] == 2)
+            else:
+                mod.addConstr(cov_k[k] + opt_k[k] <= 1)
 
     # Constraints for weights
     for j in range(m):
