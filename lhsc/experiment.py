@@ -50,6 +50,7 @@ def cnf_to_model(cnf_file) -> Optional[MaxSatModel]:
 #    filewriter.writerow(['p','cnf',param['n'],param['num_hard']+param['num_soft']])
 #    for row in model:
 #        filewriter.writerow(list(row[1]))
+
 #    csvfile.close()
 
 
@@ -347,4 +348,3 @@ if __name__ == "__main__":
                                     )
                                 except AssertionError as error:
                                     continue
-    # learn_hard_constraints()
