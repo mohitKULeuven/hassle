@@ -6,9 +6,12 @@ import pickle
 from tabulate import tabulate
 import csv
 import time
-import os
+import sys
+import argparse
 
-from .sample_models import generate_model, generate_contexts
+# import os
+
+from .sample_models import generate_model
 from .solve import solve_weighted_max_sat, get_value
 from .learn import label_instance
 from .type_def import Instance, MaxSatModel, Context
@@ -246,7 +249,7 @@ def eval_precision_and_regret(
 
 
 def eval_recall(
-    target_model, learned_model, n, sample_size, num_literal, prev_contexts
+    target_model, learned_model, n, sample_size, num_literal, prev_contexts, rng
 ):
     contexts = random_contexts(
         n, sample_size + len(prev_contexts), prev_contexts, 1, num_literal, rng
@@ -264,10 +267,22 @@ def eval_recall(
     return correct / num_sam
 
 
-def eval_increasing_examples(param, m, n, sample_size, rng):
+def increasing_examples(
+    param,
+    model_seed,
+    num_hard,
+    num_soft,
+    clause_length,
+    context_count,
+    n,
+    sample_size,
+    rng,
+    model_seeds,
+    num_vars,
+):
     print(param)
     num_literal = int(n / 2)
-    pickle_var = pickle.load(open("pickles/" + param + ".pickle", "rb"))
+    pickle_var = pickle.load(open("pickles_v2/" + param + ".pickle", "rb"))
     target_model = pickle_var["true_model"]
     learned_model = pickle_var["learned_model"]
     prev_contexts = pickle_var["contexts"]
@@ -279,7 +294,7 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
     print("True model")
     print(model_to_string(target_model))
 
-    for num_instances in [1, 20, 50]:
+    for num_instances in [1, 2, 5]:
         if num_instances > 1:
             for i, context in enumerate(learning_contexts):
                 prev_instances = [
@@ -306,7 +321,9 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
                     f"data:{data[k]},labels:{labels[k]},learning_contexts:{learning_contexts[k]}"
                 )
         start = time.time()
-        learned_model = learn_weighted_max_sat(m, data, labels, learning_contexts)
+        learned_model = learn_weighted_max_sat(
+            num_hard + num_soft, data, labels, learning_contexts
+        )
         end = time.time()
 
         pickle_var["data"] = data
@@ -316,14 +333,15 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
         pickle.dump(
             pickle_var,
             open(
-                "pickles/" + param + f"_num_instances_{num_instances}" + ".pickle", "wb"
+                "pickles_v2/" + param + f"_num_instances_{num_instances}" + ".pickle",
+                "wb",
             ),
         )
 
         print("Learned model")
         print(model_to_string(learned_model))
         recall = eval_recall(
-            target_model, learned_model, n, sample_size, num_literal, prev_contexts
+            target_model, learned_model, n, sample_size, num_literal, prev_contexts, rng
         )
         precision, regret, num_sam = eval_precision_and_regret(
             target_model, learned_model, n, sample_size, 0, num_literal=num_literal
@@ -337,7 +355,14 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
             num_literal=num_literal,
             rng=rng,
         )
-        csvfile = open("results/increasing_examples" + ".csv", "a")
+        csvfile = open(
+            "results_v2/increasing_examples"
+            + "".join(map(str, model_seeds))
+            + "_"
+            + "".join(map(str, num_vars))
+            + ".csv",
+            "a",
+        )
         filewriter = csv.writer(csvfile, delimiter=",")
         row = [
             model_seed,
@@ -347,6 +372,7 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
             clause_length,
             context_count,
             num_literal,
+            num_instances,
             len(data),
             recall,
             precision,
@@ -361,10 +387,22 @@ def eval_increasing_examples(param, m, n, sample_size, rng):
         csvfile.close()
 
 
-def evaluation(param, n, sample_size, rng):
+def evaluate_statistics(
+    param,
+    model_seed,
+    num_hard,
+    num_soft,
+    clause_length,
+    context_count,
+    n,
+    sample_size,
+    rng,
+    model_seeds,
+    num_vars,
+):
     print(param)
     num_literal = int(n / 2)
-    pickle_var = pickle.load(open("pickles/" + param + ".pickle", "rb"))
+    pickle_var = pickle.load(open("pickles_v2/" + param + ".pickle", "rb"))
     target_model = pickle_var["true_model"]
     learned_model = pickle_var["learned_model"]
     prev_contexts = pickle_var["contexts"]
@@ -381,7 +419,14 @@ def evaluation(param, n, sample_size, rng):
         target_model, learned_model, n, sample_size, 1, num_literal=num_literal, rng=rng
     )
 
-    csvfile = open("results/evaluation_stats_2" + ".csv", "a")
+    csvfile = open(
+        "results_v2/evaluate_statistics"
+        + "".join(map(str, model_seeds))
+        + "_"
+        + "".join(map(str, num_vars))
+        + ".csv",
+        "a",
+    )
     filewriter = csv.writer(csvfile, delimiter=",")
     row = [
         model_seed,
@@ -394,6 +439,7 @@ def evaluation(param, n, sample_size, rng):
         recall,
         precision,
         regret,
+        sample_size,
         num_sam,
         precision_c,
         regret_c,
@@ -403,13 +449,212 @@ def evaluation(param, n, sample_size, rng):
     csvfile.close()
 
 
-if __name__ == "__main__":
-    model_seeds = [111, 222, 333, 444, 555]
-    num_hard_lst = [1, 5, 10, 20]
-    num_soft_lst = [1, 5, 10, 20]
-    num_vars = [5, 10, 20]
+#
+#
+
+
+def generate_models(
+    n,
+    clause_length,
+    num_hard,
+    num_soft,
+    context_counts,
+    num_literal,
+    model_seed,
+    rng,
+    model_seeds,
+    num_vars,
+):
+    logging.basicConfig(level=logging.WARNING)
+
+    m = num_hard + num_soft
+    pickle_var = {}
+
+    true_start = time.time()
+    true_model = generate_model(n, clause_length, num_hard, num_soft, rng)
+    true_end = time.time()
+    true_model = [(w / 100 if w else None, clause) for w, clause in true_model]
+    #    print(f"True Model\n{model_to_string(true_model)}")
+    pickle_var["true_model"] = true_model
+
+    prev_context = []
+    data = []
+    labels = []
+    learning_contexts = []
+    for context_count in context_counts:
+        num_infeasible_context = 0
+        if len(prev_context) < context_count:
+            contexts = random_contexts(
+                n, context_count, prev_context, 1, num_literal, rng
+            )
+            tmp_data, tmp_labels, tmp_learning_contexts = get_data_set(
+                n, true_model, contexts, rng, allow_negative=True
+            )
+            if len(data) > 0:
+                data = np.append(data, tmp_data, axis=0)
+                labels = np.append(labels, tmp_labels, axis=0)
+                learning_contexts.extend(tmp_learning_contexts)
+            else:
+                data = tmp_data
+                labels = tmp_labels
+                learning_contexts = tmp_learning_contexts
+            prev_context.extend(contexts)
+            contexts = prev_context
+        else:
+            contexts = random_contexts(n, context_count, 1, num_literal, rng)
+            prev_context = contexts
+        for context in contexts:
+            solution = solve_weighted_max_sat(n, true_model, context, 1)
+
+            if solution is None:
+                num_infeasible_context += 1
+                print(f"INFEASIBLE CONTEXT {context_to_string(context)}")
+
+        pickle_var["contexts"] = contexts
+        pickle_var["data"] = data
+        pickle_var["labels"] = labels
+        pickle_var["learning_contexts"] = learning_contexts
+
+        if logger.isEnabledFor(logging.INFO):
+            overview = [
+                [
+                    f"{context_to_string(learning_contexts[k])}",
+                    f"{data[k, :]}",
+                    f"{labels[k]}",
+                ]
+                for k in range(len(labels))
+            ]
+            print(tabulate(overview))
+
+        start = time.time()
+        learned_model = learn_weighted_max_sat(m, data, labels, learning_contexts)
+        end = time.time()
+        #        print(f"Learned model\n{model_to_string(learned_model)}")
+        pickle_var["learned_model"] = learned_model
+
+        training_error = 0
+        if learned_model:
+            for k in range(data.shape[0]):
+                instance = data[k, :]
+                label = labels[k]
+                learned_label = label_instance(
+                    learned_model, instance, learning_contexts[k]
+                )
+                if label != learned_label:
+                    training_error += 1
+                    logger.warning(
+                        f"{instance} labeled {learned_label} instead of {label} (learned / true)"
+                    )
+            param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
+            pickle.dump(pickle_var, open("pickles_v2/" + param + ".pickle", "wb"))
+            csvfile = open(
+                "results_v2/generate_models"
+                + "".join(map(str, model_seeds))
+                + "_"
+                + "".join(map(str, num_vars))
+                + ".csv",
+                "a",
+            )
+            filewriter = csv.writer(csvfile, delimiter=",")
+            row = [
+                model_seed,
+                num_hard,
+                num_soft,
+                n,
+                clause_length,
+                context_count,
+                num_literal,
+                true_end - true_start,
+                end - start,
+                data.shape[0],
+                num_infeasible_context,
+                training_error,
+            ]
+            filewriter.writerow(row)
+            csvfile.close()
+
+            print(param)
+
+
+def exp_generate_models(model_seeds, num_vars):
+    #    logging.basicConfig(level=logging.INFO)
+    #    num_vars = [2,5,10,15]
     context_counts = [5, 10, 20]
-    csvfile = open("results/evaluation_stats_2" + ".csv", "w")
+
+    csvfile = open(
+        "results_v2/generate_models"
+        + "".join(map(str, model_seeds))
+        + "_"
+        + "".join(map(str, num_vars))
+        + ".csv",
+        "w",
+    )
+    filewriter = csv.writer(csvfile, delimiter=",")
+    filewriter.writerow(
+        [
+            "model_seed",
+            "num_hard",
+            "num_soft",
+            "n",
+            "clause_length",
+            "context_count",
+            "num_literal",
+            "true_model_time",
+            "time",
+            "num_example",
+            "num_infeasible_context",
+            "training_error",
+        ]
+    )
+    csvfile.close()
+    for model_seed in model_seeds:
+        rng = np.random.RandomState(model_seed)
+        for n in num_vars:
+            if n <= 5:
+                tmp_hard_lst = [0, 5]
+                tmp_soft_lst = [5]
+            elif n == 10:
+                tmp_hard_lst = [0, 5, 10]
+                tmp_soft_lst = [5, 10]
+            elif n == 15:
+                tmp_hard_lst = [0, 5, 10, 20]
+                tmp_soft_lst = [5, 10, 20]
+            num_literal = int(n / 2)
+            for clause_length in range(2, max(3, int(2 * n / 5)), 2):
+                for num_hard in tmp_hard_lst:
+                    for num_soft in tmp_soft_lst:
+                        #                            for context_count in context_counts:
+                        try:
+                            generate_models(
+                                n,
+                                clause_length,
+                                num_hard,
+                                num_soft,
+                                context_counts,
+                                num_literal,
+                                model_seed,
+                                rng,
+                                model_seeds,
+                                num_vars,
+                            )
+                        except AssertionError as error:
+                            continue
+
+
+def exp_evaluate_statistics(model_seeds, num_vars):
+    #    model_seeds = [111, 222, 333, 444, 555]
+    #    num_hard_lst = [1, 5, 10, 20]
+    #    num_soft_lst = [1, 5, 10, 20]
+    #    num_vars = [2,5,10,15]
+    context_counts = [5, 10, 20]
+    csvfile = open(
+        "results_v2/evaluate_statistics"
+        + "".join(map(str, model_seeds))
+        + "_"
+        + "".join(map(str, num_vars))
+        + ".csv",
+        "w",
+    )
     filewriter = csv.writer(csvfile, delimiter=",")
     filewriter.writerow(
         [
@@ -424,6 +669,7 @@ if __name__ == "__main__":
             "precision",
             "regret",
             "num_sam",
+            "actual_sample_size",
             "precision_c",
             "regret_c",
             "num_sam_c",
@@ -434,69 +680,143 @@ if __name__ == "__main__":
         rng = np.random.RandomState(model_seed)
         for n in num_vars:
             num_sam = 100 * (5 ** int(n / 10))
-            for num_literal in range(2, max(4, int(2 * n / 5)), 2):
-                for clause_length in range(2, max(3, int(2 * n / 5)), 2):
-                    for num_hard in num_hard_lst:
-                        for num_soft in num_soft_lst:
-                            for context_count in context_counts:
+            if n <= 5:
+                tmp_hard_lst = [0, 5]
+                tmp_soft_lst = [5]
+            elif n == 10:
+                tmp_hard_lst = [0, 5, 10]
+                tmp_soft_lst = [5, 10]
+            elif n == 15:
+                tmp_hard_lst = [0, 5, 10, 20]
+                tmp_soft_lst = [5, 10, 20]
+            num_literal = int(n / 2)
+            for clause_length in range(2, max(3, int(2 * n / 5)), 2):
+                for num_hard in tmp_hard_lst:
+                    for num_soft in tmp_soft_lst:
+                        for context_count in context_counts:
+                            param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
+                            try:
+                                evaluate_statistics(
+                                    param,
+                                    model_seed,
+                                    num_hard,
+                                    num_soft,
+                                    clause_length,
+                                    context_count,
+                                    n,
+                                    num_sam,
+                                    rng,
+                                    model_seeds,
+                                    num_vars,
+                                )
+                            except FileNotFoundError as error:
+                                continue
+
+
+def exp_increasing_examples(model_seeds, num_vars):
+    #    model_seeds = [111, 222, 333, 444, 555]
+    #    num_hard_lst = [1, 5, 10, 20]
+    #    num_soft_lst = [1, 5, 10, 20]
+    #    num_vars = [2,5,10,15]
+    context_counts = [5, 10, 20]
+    csvfile = open(
+        "results_v2/increasing_examples"
+        + "".join(map(str, model_seeds))
+        + "_"
+        + "".join(map(str, num_vars))
+        + ".csv",
+        "w",
+    )
+    filewriter = csv.writer(csvfile, delimiter=",")
+    filewriter.writerow(
+        [
+            "model_seed",
+            "num_hard",
+            "num_soft",
+            "n",
+            "clause_length",
+            "context_count",
+            "num_literal",
+            "num_instances",
+            "actual_data_size",
+            "recall",
+            "precision",
+            "regret",
+            "num_sam",
+            "precision_c",
+            "regret_c",
+            "num_sam_c",
+            "time_taken",
+        ]
+    )
+    csvfile.close()
+    for model_seed in model_seeds:
+        rng = np.random.RandomState(model_seed)
+        for n in num_vars:
+            num_sam = 100 * (5 ** int(n / 10))
+            if n <= 5:
+                tmp_hard_lst = [0, 5]
+                tmp_soft_lst = [5]
+            elif n == 10:
+                tmp_hard_lst = [0, 5, 10]
+                tmp_soft_lst = [5, 10]
+            elif n == 15:
+                tmp_hard_lst = [0, 5, 10, 20]
+                tmp_soft_lst = [5, 10, 20]
+            num_literal = int(n / 2)
+            for clause_length in range(2, max(3, int(2 * n / 5)), 2):
+                for num_hard in tmp_hard_lst:
+                    for num_soft in tmp_soft_lst:
+                        for context_count in context_counts:
+                            if num_hard + num_soft == 10:
                                 param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
-                                #                                pickle_var=pickle.load( open( 'pickles/'+param+'.pickle', "rb" ) )
-                                #                                print(model_to_string(pickle_var["true_model"]))
-                                #                                get_data_set(n, pickle_var["true_model"], [set()], rng)
                                 try:
-                                    evaluation(param, n, num_sam, rng)
+                                    increasing_examples(
+                                        param,
+                                        model_seed,
+                                        num_hard,
+                                        num_soft,
+                                        clause_length,
+                                        context_count,
+                                        n,
+                                        num_sam,
+                                        rng,
+                                        model_seeds,
+                                        num_vars,
+                                    )
                                 except FileNotFoundError as error:
                                     continue
 
-# if __name__ == "__main__":
-##    exit()
-#    model_seeds = [111,222,333]
-#    num_hard_lst = [1,5,10,20]
-#    num_soft_lst = [1,5,10,20]
-#    num_vars = [5,10]
-#    context_counts = [5,10]
-#    csvfile = open("results/increasing_examples" + ".csv", "w")
-#    filewriter = csv.writer(csvfile, delimiter=",")
-#    filewriter.writerow(
-#        [
-#            "model_seed",
-#            "num_hard",
-#            "num_soft",
-#            "n",
-#            "clause_length",
-#            "context_count",
-#            "num_literal",
-#            "num_instances",
-#            "recall",
-#            "precision",
-#            "regret",
-#            "num_sam",
-#            "precision_c",
-#            "regret_c",
-#            "num_sam_c",
-#            "time_taken"
-#        ]
-#    )
-#    csvfile.close()
-#    for model_seed in model_seeds:
-#        rng = np.random.RandomState(model_seed)
-#        for n in num_vars:
-#            num_sam=100*(5**int(n/10))
-#            for num_literal in range(2, max(4, int(2 * n / 5)),2):
-#                for clause_length in range(2, max(3, int(2 * n / 5)),2):
-#                    for num_hard in num_hard_lst:
-#                        for num_soft in num_soft_lst:
-#                            for context_count in context_counts:
-#                                param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
-##                                pickle_var=pickle.load( open( 'pickles/'+param+'.pickle', "rb" ) )
-##                                print(model_to_string(pickle_var["true_model"]))
-##                                get_data_set(n, pickle_var["true_model"], [set()], rng)
-#                                try:
-##                                    evaluation(param,n,num_sam,rng)
-#                                    eval_increasing_examples(param,num_hard+num_soft,n,num_sam,rng)
-#                                except FileNotFoundError as error:
-#                                    continue
-##                                exit()
+
+if __name__ == "__main__":
+    CLI = argparse.ArgumentParser()
+    CLI.add_argument(
+        "--function",  # name on the CLI - drop the `--` for positional/required parameters
+        #  nargs=1,  # 0 or more values expected => creates a list
+        type=str,
+        default="exp_generate_models",  # default if nothing is provided
+    )
+    CLI.add_argument(
+        "--model_seeds",  # name on the CLI - drop the `--` for positional/required parameters
+        nargs="*",  # 0 or more values expected => creates a list
+        type=int,
+        default=[111, 222, 333, 444, 555],  # default if nothing is provided
+    )
+    CLI.add_argument(
+        "--num_vars",  # name on the CLI - drop the `--` for positional/required parameters
+        nargs="*",  # 0 or more values expected => creates a list
+        type=int,
+        default=[2, 5, 10],  # default if nothing is provided
+    )
+    args = CLI.parse_args()
+    #    print(args)
+    #    exit()
+    if args.function == "exp_generate_models":
+        exp_generate_models(args.model_seeds, args.num_vars)
+    elif args.function == "exp_increasing_examples":
+        exp_increasing_examples(args.model_seeds, args.num_vars)
+    elif args.function == "exp_evaluate_statistics":
+        exp_evaluate_statistics(args.model_seeds, args.num_vars)
 
 
 def learn_hard_constraints():
@@ -531,180 +851,3 @@ def learn_hard_constraints():
                 )
 
         print(f"REGRET {eval_regret(n, true_model, learned_model)}")
-
-
-def learn_from_random_model(
-    n, clause_length, num_hard, num_soft, context_counts, num_literal, model_seed, rng
-):
-    logging.basicConfig(level=logging.WARNING)
-
-    m = num_hard + num_soft
-    pickle_var = {}
-    #   pickle_vars=pickle.load( open( 'pickles/'+param+'.pickle', "rb" ) )
-    #   print(pickle_vars['data'].shape[0])
-    #   continue
-
-    true_start = time.time()
-    true_model = generate_model(n, clause_length, num_hard, num_soft, rng)
-    true_end = time.time()
-    true_model = [(w / 100 if w else None, clause) for w, clause in true_model]
-    print(f"True Model\n{model_to_string(true_model)}")
-    pickle_var["true_model"] = true_model
-
-    prev_context = []
-    data = []
-    labels = []
-    learning_contexts = []
-    for context_count in context_counts:
-        num_infeasible_context = 0
-        if len(prev_context) < context_count:
-            contexts = random_contexts(
-                n, context_count, prev_context, 1, num_literal, rng
-            )
-            tmp_data, tmp_labels, tmp_learning_contexts = get_data_set(
-                n, true_model, contexts, rng, allow_negative=True
-            )
-            if len(data) > 0:
-                data = np.append(data, tmp_data, axis=0)
-                labels = np.append(labels, tmp_labels, axis=0)
-                learning_contexts.extend(tmp_learning_contexts)
-            else:
-                data = tmp_data
-                labels = tmp_labels
-                learning_contexts = tmp_learning_contexts
-            prev_context.extend(contexts)
-            contexts = prev_context
-        else:
-            contexts = random_contexts(n, context_count, 1, num_literal, rng)
-            prev_context = contexts
-        for context in contexts:
-            #        print(f"Context {context_to_string(context)}")
-            solution = solve_weighted_max_sat(n, true_model, context, 1)
-            #        print(f"Solution {solution}")
-
-            if solution is None:
-                num_infeasible_context += 1
-                print(f"INFEASIBLE CONTEXT {context_to_string(context)}")
-
-        pickle_var["contexts"] = contexts
-        pickle_var["data"] = data
-        pickle_var["labels"] = labels
-        pickle_var["learning_contexts"] = learning_contexts
-
-        if logger.isEnabledFor(logging.INFO):
-            overview = [
-                [
-                    f"{context_to_string(learning_contexts[k])}",
-                    f"{data[k, :]}",
-                    f"{labels[k]}",
-                ]
-                for k in range(len(labels))
-            ]
-            print(tabulate(overview))
-        #        print(data, labels, learning_contexts)
-
-        start = time.time()
-        learned_model = learn_weighted_max_sat(m, data, labels, learning_contexts)
-        end = time.time()
-        print(f"Learned model\n{model_to_string(learned_model)}")
-        pickle_var["learned_model"] = learned_model
-
-        training_error = 0
-        if learned_model:
-            for k in range(data.shape[0]):
-                instance = data[k, :]
-                label = labels[k]
-                learned_label = label_instance(
-                    learned_model, instance, learning_contexts[k]
-                )
-                if label != learned_label:
-                    training_error += 1
-                    #                if label:
-                    #
-                    #                    incorrect_best_solution=solve_weighted_max_sat(n, learned_model, learning_contexts[k]).astype(np.int)
-                    #                    logger.warning(
-                    #                        f"{instance} labeled {learned_label} instead of {label} because of {incorrect_best_solution}"
-                    #                    )
-                    logger.warning(
-                        f"{instance} labeled {learned_label} instead of {label} (learned / true)"
-                    )
-            #        regret=eval_regret(n, true_model, learned_model)
-            #        print("REGRET ", regret)
-            param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
-            pickle.dump(pickle_var, open("pickles/" + param + ".pickle", "wb"))
-            csvfile = open("results/results" + ".csv", "a")
-            filewriter = csv.writer(csvfile, delimiter=",")
-            row = [
-                model_seed,
-                num_hard,
-                num_soft,
-                n,
-                clause_length,
-                context_count,
-                num_literal,
-                true_end - true_start,
-                end - start,
-                data.shape[0],
-                num_infeasible_context,
-                training_error,
-            ]
-            filewriter.writerow(row)
-            csvfile.close()
-            print(param)
-
-
-# if __name__ == "__main__":
-#    learn_hard_constraints()
-#    exit()
-#
-#    # logging.basicConfig(level=logging.INFO)
-#    #    cnf_dir="cnfs/"
-#    #    for cnf_file in os.listdir(cnf_dir):
-#    #        print(cnf_to_model(cnf_dir+cnf_file))
-#    #    exit()
-#    model_seeds = [111, 222, 333, 444, 555]
-#    num_hard_lst = [1, 5, 10, 20]
-#    num_soft_lst = [1, 5, 10, 20]
-#    num_vars = [5, 10, 20]
-#    context_counts = [5, 10, 20]
-#
-#    csvfile = open("results/results" + ".csv", "w")
-#    filewriter = csv.writer(csvfile, delimiter=",")
-#    filewriter.writerow(
-#        [
-#            "model_seed",
-#            "num_hard",
-#            "num_soft",
-#            "n",
-#            "clause_length",
-#            "context_count",
-#            "num_literal",
-#            "true_model_time",
-#            "time",
-#            "num_example",
-#            "num_infeasible_context",
-#            "training_error",
-#        ]
-#    )
-#    csvfile.close()
-#    for model_seed in model_seeds:
-#        rng = np.random.RandomState(model_seed)
-#        for n in num_vars:
-#            for num_literal in range(2, max(4, int(2 * n / 5)),2):
-#                for clause_length in range(2, max(3, int(2 * n / 5)),2):
-#                    for num_hard in num_hard_lst:
-#                        for num_soft in num_soft_lst:
-##                            for context_count in context_counts:
-#                            try:
-#                                learn_from_random_model(
-#                                    n,
-#                                    clause_length,
-#                                    num_hard,
-#                                    num_soft,
-#                                    context_counts,
-#                                    num_literal,
-#                                    model_seed,rng
-#                                )
-#                            except AssertionError as error:
-#                                continue
-#                        exit()
