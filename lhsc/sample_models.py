@@ -3,6 +3,7 @@
 import numpy as np
 import itertools as it
 import logging
+import copy
 
 from pysat.examples.fm import FM
 from pysat.formula import WCNF
@@ -77,19 +78,25 @@ def generate_wcnfs(path, models_and_contexts):
             wcnf_context.to_file(path + f"_{i}_context_{j}.wcnf")
 
 
-def get_random_clauses(wcnf, rng, clauses, n):
+def get_random_clauses(wcnf, rng, clauses, num_clauses):
     #    wcnf = WCNF()
-    selected_indices = []
-    checked_indices = []
-    while n > 0:
-        indices = [ind for ind in range(len(clauses)) if ind not in checked_indices]
-        i = rng.choice(indices)
-        checked_indices.append(i)
-        if not is_entailed(wcnf, clauses[i]):
-            wcnf.append(clauses[i])
-            selected_indices.append(i)
-            n = n - 1
-        if len(checked_indices) == len(clauses):
+
+    for trial in range(num_clauses * 10):
+        wcnf_copy = copy.deepcopy(wcnf)
+        selected_indices = []
+        checked_indices = []
+        n = num_clauses
+        while n > 0:
+            indices = [ind for ind in range(len(clauses)) if ind not in checked_indices]
+            i = rng.choice(indices)
+            checked_indices.append(i)
+            if not is_entailed(wcnf_copy, clauses[i]):
+                wcnf_copy.append(clauses[i])
+                selected_indices.append(i)
+                n = n - 1
+            if len(checked_indices) == len(clauses):
+                break
+        if n == 0:
             break
 
     return selected_indices
@@ -146,10 +153,14 @@ def generate_models(
         model = []
         wcnf = WCNF()
         indices = get_random_clauses(wcnf, rng, clauses, total)
+        if len(indices) < total:
+            print(len(clauses), total, len(indices))
+        assert len(indices) == total
+
+        #        print(clauses)
         #        indices = list(sorted(rng.permutation(num_clauses)[:total]))
         hard_indices = list(sorted(rng.permutation(indices)[:num_hard]))
         soft_indices = list(sorted(set(indices) - set(hard_indices)))
-        assert len(soft_indices) == num_soft
 
         weights = rng.randint(_MIN_WEIGHT, _MAX_WEIGHT, size=num_soft)
         for i in hard_indices:

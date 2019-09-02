@@ -282,7 +282,7 @@ def increasing_examples(
 ):
     print(param)
     num_literal = int(n / 2)
-    pickle_var = pickle.load(open("pickles_v2/" + param + ".pickle", "rb"))
+    pickle_var = pickle.load(open("pickles_v3/" + param + ".pickle", "rb"))
     target_model = pickle_var["true_model"]
     learned_model = pickle_var["learned_model"]
     prev_contexts = pickle_var["contexts"]
@@ -333,7 +333,7 @@ def increasing_examples(
         pickle.dump(
             pickle_var,
             open(
-                "pickles_v2/" + param + f"_num_instances_{num_instances}" + ".pickle",
+                "pickles_v3/" + param + f"_num_instances_{num_instances}" + ".pickle",
                 "wb",
             ),
         )
@@ -356,7 +356,7 @@ def increasing_examples(
             rng=rng,
         )
         csvfile = open(
-            "results_v2/increasing_examples"
+            "results_v3/increasing_examples"
             + "".join(map(str, model_seeds))
             + "_"
             + "".join(map(str, num_vars))
@@ -402,7 +402,7 @@ def evaluate_statistics(
 ):
     print(param)
     num_literal = int(n / 2)
-    pickle_var = pickle.load(open("pickles_v2/" + param + ".pickle", "rb"))
+    pickle_var = pickle.load(open("pickles_v3/" + param + ".pickle", "rb"))
     target_model = pickle_var["true_model"]
     learned_model = pickle_var["learned_model"]
     prev_contexts = pickle_var["contexts"]
@@ -410,7 +410,7 @@ def evaluate_statistics(
     #    print(model_to_string(target_model))
     #    print(prev_contexts)
     recall = eval_recall(
-        target_model, learned_model, n, sample_size, num_literal, prev_contexts
+        target_model, learned_model, n, sample_size, num_literal, prev_contexts, rng
     )
     precision, regret, num_sam = eval_precision_and_regret(
         target_model, learned_model, n, sample_size, 0, num_literal=num_literal
@@ -420,7 +420,7 @@ def evaluate_statistics(
     )
 
     csvfile = open(
-        "results_v2/evaluate_statistics"
+        "results_v3/evaluate_statistics"
         + "".join(map(str, model_seeds))
         + "_"
         + "".join(map(str, num_vars))
@@ -546,9 +546,9 @@ def generate_models(
                         f"{instance} labeled {learned_label} instead of {label} (learned / true)"
                     )
             param = f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_context_count_{context_count}_num_literal_{num_literal}"
-            pickle.dump(pickle_var, open("pickles_v2/" + param + ".pickle", "wb"))
+            pickle.dump(pickle_var, open("pickles_v3/" + param + ".pickle", "wb"))
             csvfile = open(
-                "results_v2/generate_models"
+                "results_v3/generate_models"
                 + "".join(map(str, model_seeds))
                 + "_"
                 + "".join(map(str, num_vars))
@@ -573,16 +573,17 @@ def generate_models(
             filewriter.writerow(row)
             csvfile.close()
 
-            print(param)
+
+#            print(param)
 
 
 def exp_generate_models(model_seeds, num_vars):
     #    logging.basicConfig(level=logging.INFO)
     #    num_vars = [2,5,10,15]
-    context_counts = [5, 10, 20]
+    context_counts = [2, 5, 10]
 
     csvfile = open(
-        "results_v2/generate_models"
+        "results_v3/generate_models"
         + "".join(map(str, model_seeds))
         + "_"
         + "".join(map(str, num_vars))
@@ -638,6 +639,9 @@ def exp_generate_models(model_seeds, num_vars):
                                 num_vars,
                             )
                         except AssertionError as error:
+                            print(
+                                f"_model_seed_{model_seed}_num_hard_{num_hard}_num_soft_{num_soft}_n_{n}__clause_length_{clause_length}_num_literal_{num_literal}"
+                            )
                             continue
 
 
@@ -646,9 +650,9 @@ def exp_evaluate_statistics(model_seeds, num_vars):
     #    num_hard_lst = [1, 5, 10, 20]
     #    num_soft_lst = [1, 5, 10, 20]
     #    num_vars = [2,5,10,15]
-    context_counts = [5, 10, 20]
+    context_counts = [2, 5, 10]
     csvfile = open(
-        "results_v2/evaluate_statistics"
+        "results_v3/evaluate_statistics"
         + "".join(map(str, model_seeds))
         + "_"
         + "".join(map(str, num_vars))
@@ -718,9 +722,9 @@ def exp_increasing_examples(model_seeds, num_vars):
     #    num_hard_lst = [1, 5, 10, 20]
     #    num_soft_lst = [1, 5, 10, 20]
     #    num_vars = [2,5,10,15]
-    context_counts = [5, 10, 20]
+    context_counts = [2, 5, 10]
     csvfile = open(
-        "results_v2/increasing_examples"
+        "results_v3/increasing_examples"
         + "".join(map(str, model_seeds))
         + "_"
         + "".join(map(str, num_vars))
