@@ -8,7 +8,7 @@ from gurobipy import Model, GRB, quicksum
 
 
 def solve_weighted_max_sat(
-    n: int, model: MaxSatModel, context: Clause,num_sol
+    n: int, model: MaxSatModel, context: Clause, num_sol
 ) -> Optional[Instance]:
 
     if any(w and (w > 1 or w < 0) for w, _ in model):
@@ -68,28 +68,27 @@ def solve_weighted_max_sat(
             l = i - 1
             mod.addConstr(x_l[l] == 1, name=f"x_{l} = 1")
 
-    
     mod.setParam(GRB.Param.PoolSolutions, num_sol)
     mod.setParam(GRB.Param.PoolSearchMode, 2)
     mod.setParam(GRB.Param.PoolGap, 0)
     mod.optimize()
-    
-    if num_sol==1:
+
+    if num_sol == 1:
         if mod.status == GRB.Status.OPTIMAL:
             return np.array([x_l[l].x for l in range(n)])
         else:
             return None
-    
+
     num_sol = mod.SolCount
-    list_sol=[]
+    list_sol = []
     for i in range(num_sol):
-        mod.setParam(GRB.Param.SolutionNumber,i)
+        mod.setParam(GRB.Param.SolutionNumber, i)
         if mod.status == GRB.Status.OPTIMAL:
-            sol=mod.getAttr('xn', x_l)
+            sol = mod.getAttr("xn", x_l)
             if mod.status == GRB.Status.OPTIMAL:
                 list_sol.append(np.array([sol[l] for l in range(n)]))
-#        else:
-#            list_sol.append(None)
+    #        else:
+    #            list_sol.append(None)
     return list_sol
 
 

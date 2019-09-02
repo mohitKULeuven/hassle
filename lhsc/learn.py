@@ -375,7 +375,9 @@ def learn_weighted_max_sat(
             ].capitalize()
 
         def char_feature(_i, val):
-            return (" " if val else "!") + "abcdefghijklmnopqrstuvwxyz"[abs(_i)].capitalize()
+            return (" " if val else "!") + "abcdefghijklmnopqrstuvwxyz"[
+                abs(_i)
+            ].capitalize()
 
         # print("Found a solution")
         # for j in range(m):
@@ -434,7 +436,7 @@ def label_instance(model: MaxSatModel, instance: Instance, context: Context) -> 
     value = get_value(model, instance)
     if value is None:
         return False
-    best_instance = solve_weighted_max_sat(len(instance), model, context,1)
+    best_instance = solve_weighted_max_sat(len(instance), model, context, 1)
     best_value = get_value(model, best_instance)
     logger.debug(f"Best instance: {best_value} - {best_instance}")
     return value >= best_value
@@ -604,22 +606,22 @@ def solve_example2():
     # 1.0: A
 
     print("Global context")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], set(),1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], set(), 1)
 
     print("Context:  A")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {1},1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {1}, 1)
 
     print("Context: !A")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-1},1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-1}, 1)
 
     print("Context:  B")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {2},1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {2}, 1)
 
     print("Context: !B")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-2},1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-2}, 1)
 
     print("Context: !A, !B")
-    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-1, -2},1)
+    solve_weighted_max_sat(2, [(None, {1, 2}), (1.0, {1})], {-1, -2}, 1)
 
 
 if __name__ == "__main__":
