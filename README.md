@@ -9,3 +9,4 @@ To learn a weighted MaxSat Model from a list of contextual examples call learn_w
 :param contexts: A list of s set-encoded contexts.
 :return: A list of weights and clauses. Every entry of the list is a tuple containing as first element None for hard constraints (clauses) or a floating point number for soft constraints, and as second element a set-encoded clause.
     
+Some examples are provided for reference in learn.py
